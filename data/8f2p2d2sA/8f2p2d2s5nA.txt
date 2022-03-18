@@ -1,0 +1,7 @@
+NumNodes	NumPicNodes	NumTrucks	NumStations	NumPicFull	NumPicEmpty	NumDelEmpty	Tmax	DistanceMatrix
+20		10		4		2		8		2		2		5000		5
+20		10		6		2		8		2		2		5000		5
+20		10		8		2		8		2		2		5000		5
+20		10		4		2		8		2		2		10000		5
+20		10		6		2		8		2		2		10000		5
+20		10		8		2		8		2		2		10000		5
