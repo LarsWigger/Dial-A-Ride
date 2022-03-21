@@ -131,6 +131,14 @@ mod parser {
         //parse trucks
         let mut truck_vec = Vec::with_capacity(identifier.num_trucks);
         parse_trucks(&identifier, &base_path, &mut truck_vec);
+        //parse matrices
+        let matrix_size = identifier.get_matrix_dimension() ^ 2;
+        let mut distance_matrix = Vec::with_capacity(matrix_size);
+        let distance_matrix_path = base_path.join(identifier.get_distance_matrix_file_name());
+        parse_matrix(&distance_matrix_path, &mut distance_matrix);
+        let mut time_matrix = Vec::with_capacity(matrix_size);
+        let time_matrix_path = base_path.join(identifier.get_time_matrix_file_name());
+        parse_matrix(&time_matrix_path, &mut time_matrix);
     }
 
     fn parse_num_trucks_and_t_max(identifier: &mut DataIdentifier, base_path: &Path) {
@@ -169,6 +177,13 @@ mod parser {
             let fuel = fuel_entries.next().unwrap().parse().unwrap();
             let truck = Truck::new(num_20_foot_containers, num_40_foot_containers, fuel);
             truck_vec.push(truck);
+        }
+    }
+
+    fn parse_matrix(path: &Path, matrix: &mut Vec<u32>) {
+        let matrix_string = fs::read_to_string(path).unwrap();
+        for entry in matrix_string.split_whitespace() {
+            matrix.push(entry.parse().unwrap());
         }
     }
 }
