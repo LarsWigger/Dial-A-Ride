@@ -3,7 +3,7 @@ use crate::data::Truck;
 use std::fs;
 use std::path::Path;
 
-pub struct DataIdentifier {
+struct DataIdentifier {
     full_pickup: usize,
     empty_pickup: usize,
     empty_delivery: usize,
@@ -189,7 +189,7 @@ fn parse_time_constraints(
     let mut service_time_entries = constraint_lines.next().unwrap().split_whitespace();
     let depot_service_time: u32 = service_time_entries.next().unwrap().parse().unwrap();
     let mut service_times: Vec<u32> = Vec::with_capacity(num_entries);
-    for i in 0..num_entries {
+    for _ in 0..num_entries {
         service_times.push(service_time_entries.next().unwrap().parse().unwrap());
     }
     //earliest times
@@ -210,4 +210,24 @@ fn parse_time_constraints(
         earliest_visiting_times,
         latest_visiting_times,
     );
+}
+
+#[cfg(test)]
+mod parser_test {
+    use crate::parser;
+    #[test]
+    fn parse_2_2_2_2_1_2() {
+        let config = parser::parse(2, 2, 2, 2, 1, 2);
+        //test distance matrix
+        assert_eq!(config.get_distance_between(0, 0), 0);
+        assert_eq!(config.get_distance_between(3, 2), 199);
+        //test time matrix
+        assert_eq!(config.get_time_between(10, 9), 94);
+        //trucks
+        assert_eq!(config.get_num_trucks(), 6);
+        let truck = config.get_truck(4);
+        assert_eq!(truck.get_num_20_foot_containers(), 2);
+        assert_eq!(truck.get_num_40_foot_containers(), 0);
+        assert_eq!(truck.get_fuel(), 285)
+    }
 }
