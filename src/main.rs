@@ -20,7 +20,6 @@ mod parser {
 
     impl DataIdentifier {
         fn get_base_folder(&self) -> String {
-            //how is this defined? unclear whether delivery also counts
             return format!(
                 "{}f{}p{}d{}s{}",
                 self.full_pickup,
@@ -76,27 +75,6 @@ mod parser {
                 self.get_data_type()
             );
         }
-        fn parse_num_trucks_and_t_max(&mut self, base_path: &Path) {
-            let path = base_path.join(self.get_base_file_name());
-            println!("Parsing {} ...", path.display());
-            let file_string = fs::read_to_string(path).expect("Unable to parse file");
-            let mut lines = file_string.lines();
-            //remove header and the lines before the intended one
-            for _ in 0..self.scenario {
-                _ = lines.next()
-            }
-            let mut entries = lines.next().unwrap().split_whitespace();
-            for i in 0..10 {
-                if (i == 2) {
-                    //num_trucks
-                    self.num_trucks = entries.next().unwrap().parse().unwrap();
-                } else if (i == 7) {
-                    self.t_max = entries.next().unwrap().parse().unwrap();
-                } else {
-                    _ = entries.next();
-                }
-            }
-        }
     }
 
     const BASE_PATH_STR: &str = "C:\\Users\\larsw\\Documents\\Workspaces\\Dial-A-Ride\\data";
@@ -109,5 +87,39 @@ mod parser {
         sample_number: usize,
         scenario: usize,
     ) {
+        let mut identifier = DataIdentifier {
+            full_pickup: full_pickup,
+            empty_pickup: empty_pickup,
+            empty_delivery: empty_delivery,
+            afs: afs,
+            sample_number: sample_number,
+            scenario: scenario,
+            num_trucks: 0, //to be overwritten
+            t_max: 0,      //to be overwritten
+        };
+        let base_path = Path::new(BASE_PATH_STR).join(identifier.get_base_folder());
+        parse_num_trucks_and_t_max(&mut identifier, &base_path);
+    }
+
+    fn parse_num_trucks_and_t_max(identifier: &mut DataIdentifier, base_path: &Path) {
+        let path = base_path.join(identifier.get_base_file_name());
+        println!("Parsing {} ...", path.display());
+        let file_string = fs::read_to_string(path).unwrap();
+        let mut lines = file_string.lines();
+        //remove header and the lines before the intended one
+        for _ in 0..identifier.scenario {
+            _ = lines.next()
+        }
+        let mut entries = lines.next().unwrap().split_whitespace();
+        for i in 0..10 {
+            if (i == 2) {
+                //num_trucks
+                identifier.num_trucks = entries.next().unwrap().parse().unwrap();
+            } else if (i == 7) {
+                identifier.t_max = entries.next().unwrap().parse().unwrap();
+            } else {
+                _ = entries.next();
+            }
+        }
     }
 }
