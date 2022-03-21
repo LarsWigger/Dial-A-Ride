@@ -1,9 +1,33 @@
 fn main() {
-    parser::parse(2, 2, 2, 2, 1, 4);
+    parser::parse(2, 2, 2, 2, 1, 2);
     println!("Hello, world!");
 }
 
+mod data {
+    pub struct Truck {
+        num_20_foot_containers: usize,
+        num_40_foot_containers: usize,
+        fuel: usize,
+    }
+
+    impl Truck {
+        pub fn new(
+            num_20_foot_containers: usize,
+            num_40_foot_containers: usize,
+            fuel: usize,
+        ) -> Truck {
+            return Truck {
+                num_20_foot_containers,
+                num_40_foot_containers,
+                fuel,
+            };
+        }
+    }
+    struct Config {}
+}
+
 mod parser {
+    use crate::data::Truck;
     use std::fs;
     use std::path::Path;
 
@@ -87,6 +111,7 @@ mod parser {
         sample_number: usize,
         scenario: usize,
     ) {
+        //setup data needed for parsing
         let mut identifier = DataIdentifier {
             full_pickup: full_pickup,
             empty_pickup: empty_pickup,
@@ -99,6 +124,13 @@ mod parser {
         };
         let base_path = Path::new(BASE_PATH_STR).join(identifier.get_base_folder());
         parse_num_trucks_and_t_max(&mut identifier, &base_path);
+        println!(
+            "num_trucks: {}; t_max: {}",
+            identifier.num_trucks, identifier.t_max
+        );
+        //parse trucks
+        let mut truck_vec = Vec::with_capacity(identifier.num_trucks);
+        parse_trucks(&identifier, &base_path, &mut truck_vec);
     }
 
     fn parse_num_trucks_and_t_max(identifier: &mut DataIdentifier, base_path: &Path) {
@@ -120,6 +152,23 @@ mod parser {
             } else {
                 _ = entries.next();
             }
+        }
+    }
+
+    fn parse_trucks(identifier: &DataIdentifier, base_path: &Path, truck_vec: &mut Vec<Truck>) {
+        let resource_path = base_path.join(identifier.get_resouce_file_name());
+        let resource_string = fs::read_to_string(resource_path).unwrap();
+        let mut resource_lines = resource_string.lines();
+        let fuel_path = base_path.join(identifier.get_fuel_file_name());
+        let fuel_string = fs::read_to_string(fuel_path).unwrap();
+        let mut fuel_entries = fuel_string.split_whitespace();
+        for _ in 0..identifier.num_trucks {
+            let mut resource_entries = resource_lines.next().unwrap().split_whitespace();
+            let num_20_foot_containers = resource_entries.next().unwrap().parse().unwrap();
+            let num_40_foot_containers = resource_entries.next().unwrap().parse().unwrap();
+            let fuel = fuel_entries.next().unwrap().parse().unwrap();
+            let truck = Truck::new(num_20_foot_containers, num_40_foot_containers, fuel);
+            truck_vec.push(truck);
         }
     }
 }
