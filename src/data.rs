@@ -81,4 +81,28 @@ impl Config {
     pub fn get_truck(&self, index: usize) -> &Truck {
         return &self.trucks[index];
     }
+    pub fn get_depot_service_time(&self) -> u32 {
+        return self.depot_service_time;
+    }
+    pub fn get_service_time(&self, index: usize) -> u32 {
+        return self.service_times[index];
+    }
+    pub fn get_earliest_visiting_time(&self, index: usize) -> u32 {
+        return self.earliest_visiting_times[index];
+    }
+    pub fn get_latest_visiting_time(&self, index: usize) -> u32 {
+        return self.latest_visiting_times[index];
+    }
+    pub fn get_full_pickup(&self) -> usize {
+        return self.full_pickup;
+    }
+    pub fn get_empty_pickup(&self) -> usize {
+        return self.empty_pickup;
+    }
+    pub fn get_empty_delivery(&self) -> usize {
+        return self.empty_delivery;
+    }
+    pub fn get_afs(&self) -> usize {
+        return self.afs;
+    }
 }
