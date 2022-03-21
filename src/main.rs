@@ -1,5 +1,5 @@
 fn main() {
-    parser::parse(2, 2, 2, 2, 1, 2);
+    let config = parser::parse(2, 2, 2, 2, 1, 2);
     println!("Hello, world!");
 }
 
@@ -23,12 +23,11 @@ mod data {
             };
         }
     }
-    struct Config {
+    pub struct Config {
         full_pickup: usize,
         empty_pickup: usize,
         empty_delivery: usize,
         afs: usize,
-        num_trucks: usize,
         trucks: Vec<Truck>,
         distance_matrix: Vec<u32>,
         time_matrix: Vec<u32>,
@@ -37,9 +36,40 @@ mod data {
         earliest_visiting_times: Vec<u32>,
         latest_visiting_times: Vec<u32>,
     }
+
+    impl Config {
+        pub fn new(
+            full_pickup: usize,
+            empty_pickup: usize,
+            empty_delivery: usize,
+            afs: usize,
+            trucks: Vec<Truck>,
+            distance_matrix: Vec<u32>,
+            time_matrix: Vec<u32>,
+            depot_service_time: u32,
+            service_times: Vec<u32>,
+            earliest_visiting_times: Vec<u32>,
+            latest_visiting_times: Vec<u32>,
+        ) -> Config {
+            return Config {
+                full_pickup,
+                empty_pickup,
+                empty_delivery,
+                afs,
+                trucks,
+                distance_matrix,
+                time_matrix,
+                depot_service_time,
+                service_times,
+                earliest_visiting_times,
+                latest_visiting_times,
+            };
+        }
+    }
 }
 
 mod parser {
+    use crate::data::Config;
     use crate::data::Truck;
     use std::fs;
     use std::path::Path;
@@ -129,7 +159,7 @@ mod parser {
         afs: usize,
         sample_number: usize,
         scenario: usize,
-    ) {
+    ) -> Config {
         //setup data needed for parsing
         let mut identifier = DataIdentifier {
             full_pickup: full_pickup,
@@ -148,7 +178,7 @@ mod parser {
             identifier.num_trucks, identifier.t_max
         );
         //parse trucks
-        let mut truck_vec = parse_trucks(&identifier, &base_path);
+        let truck_vec = parse_trucks(&identifier, &base_path);
         //parse matrices
         let matrix_size = identifier.get_matrix_dimension() ^ 2;
         let mut distance_matrix = Vec::with_capacity(matrix_size);
@@ -159,6 +189,19 @@ mod parser {
         parse_matrix(&time_matrix_path, &mut time_matrix);
         let (depot_service_time, service_times, earliest_visiting_times, latest_visiting_times) =
             parse_time_constraints(&identifier, &base_path);
+        return Config::new(
+            full_pickup,
+            empty_pickup,
+            empty_delivery,
+            afs,
+            truck_vec,
+            distance_matrix,
+            time_matrix,
+            depot_service_time,
+            service_times,
+            earliest_visiting_times,
+            latest_visiting_times,
+        );
     }
 
     fn parse_num_trucks_and_t_max(identifier: &mut DataIdentifier, base_path: &Path) {
