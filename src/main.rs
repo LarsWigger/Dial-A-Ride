@@ -23,7 +23,20 @@ mod data {
             };
         }
     }
-    struct Config {}
+    struct Config {
+        full_pickup: usize,
+        empty_pickup: usize,
+        empty_delivery: usize,
+        afs: usize,
+        num_trucks: usize,
+        trucks: Vec<Truck>,
+        distance_matrix: Vec<u32>,
+        time_matrix: Vec<u32>,
+        depot_service_time: u32,
+        service_times: Vec<u32>,
+        earliest_visiting_times: Vec<u32>,
+        latest_visiting_times: Vec<u32>,
+    }
 }
 
 mod parser {
@@ -82,9 +95,6 @@ mod parser {
         fn get_fuel_file_name(&self) -> String {
             return format!("FuelLevel{}_T.txt", self.num_trucks);
         }
-        fn get_total_capacity_file_name(&self) -> String {
-            return format!("Truck{}_T.txt", self.num_trucks);
-        }
         fn get_resouce_file_name(&self) -> String {
             return format!("Resource{}_T.txt", self.num_trucks);
         }
@@ -97,6 +107,15 @@ mod parser {
                 self.afs,
                 self.sample_number,
                 self.get_data_type()
+            );
+        }
+        fn get_variables_file_name(&self) -> String {
+            return format!(
+                "variables{}_N{}_T{}_P_No{}.txt",
+                self.get_matrix_dimension() - 2 - self.afs,
+                self.t_max,
+                self.full_pickup,
+                self.sample_number
             );
         }
     }
@@ -129,8 +148,7 @@ mod parser {
             identifier.num_trucks, identifier.t_max
         );
         //parse trucks
-        let mut truck_vec = Vec::with_capacity(identifier.num_trucks);
-        parse_trucks(&identifier, &base_path, &mut truck_vec);
+        let mut truck_vec = parse_trucks(&identifier, &base_path);
         //parse matrices
         let matrix_size = identifier.get_matrix_dimension() ^ 2;
         let mut distance_matrix = Vec::with_capacity(matrix_size);
@@ -139,6 +157,8 @@ mod parser {
         let mut time_matrix = Vec::with_capacity(matrix_size);
         let time_matrix_path = base_path.join(identifier.get_time_matrix_file_name());
         parse_matrix(&time_matrix_path, &mut time_matrix);
+        let (depot_service_time, service_times, earliest_visiting_times, latest_visiting_times) =
+            parse_time_constraints(&identifier, &base_path);
     }
 
     fn parse_num_trucks_and_t_max(identifier: &mut DataIdentifier, base_path: &Path) {
@@ -163,7 +183,8 @@ mod parser {
         }
     }
 
-    fn parse_trucks(identifier: &DataIdentifier, base_path: &Path, truck_vec: &mut Vec<Truck>) {
+    fn parse_trucks(identifier: &DataIdentifier, base_path: &Path) -> Vec<Truck> {
+        let mut truck_vec = Vec::with_capacity(identifier.num_trucks);
         let resource_path = base_path.join(identifier.get_resouce_file_name());
         let resource_string = fs::read_to_string(resource_path).unwrap();
         let mut resource_lines = resource_string.lines();
@@ -178,6 +199,7 @@ mod parser {
             let truck = Truck::new(num_20_foot_containers, num_40_foot_containers, fuel);
             truck_vec.push(truck);
         }
+        return truck_vec;
     }
 
     fn parse_matrix(path: &Path, matrix: &mut Vec<u32>) {
@@ -185,5 +207,40 @@ mod parser {
         for entry in matrix_string.split_whitespace() {
             matrix.push(entry.parse().unwrap());
         }
+    }
+
+    fn parse_time_constraints(
+        identifier: &DataIdentifier,
+        base_path: &Path,
+    ) -> (u32, Vec<u32>, Vec<u32>, Vec<u32>) {
+        let path = base_path.join(identifier.get_variables_file_name());
+        let contraint_string = fs::read_to_string(path).unwrap();
+        let mut constraint_lines = contraint_string.lines();
+        let num_entries = identifier.get_matrix_dimension() - 2 - identifier.afs;
+        //service times
+        let mut service_time_entries = constraint_lines.next().unwrap().split_whitespace();
+        let depot_service_time: u32 = service_time_entries.next().unwrap().parse().unwrap();
+        let mut service_times: Vec<u32> = Vec::with_capacity(num_entries);
+        for i in 0..num_entries {
+            service_times.push(service_time_entries.next().unwrap().parse().unwrap());
+        }
+        //earliest times
+        let earliest_time_entries = constraint_lines.next().unwrap().split_whitespace();
+        let mut earliest_visiting_times: Vec<u32> = Vec::with_capacity(num_entries);
+        for entry in earliest_time_entries {
+            earliest_visiting_times.push(entry.parse().unwrap());
+        }
+        //latest times
+        let latest_time_entries = constraint_lines.next().unwrap().split_whitespace();
+        let mut latest_visiting_times: Vec<u32> = Vec::with_capacity(num_entries);
+        for entry in latest_time_entries {
+            latest_visiting_times.push(entry.parse().unwrap());
+        }
+        return (
+            depot_service_time,
+            service_times,
+            earliest_visiting_times,
+            latest_visiting_times,
+        );
     }
 }
