@@ -1,11 +1,19 @@
+pub enum ContainerType {
+    Full20,
+    Empty20,
+    Full40,
+    Empty40,
+    NoContainer,
+}
+
 pub struct Truck {
     num_20_foot_containers: u32,
     num_40_foot_containers: u32,
-    fuel: u32,
+    fuel: f32,
 }
 
 impl Truck {
-    pub fn new(num_20_foot_containers: u32, num_40_foot_containers: u32, fuel: u32) -> Truck {
+    pub fn new(num_20_foot_containers: u32, num_40_foot_containers: u32, fuel: f32) -> Truck {
         return Truck {
             num_20_foot_containers,
             num_40_foot_containers,
@@ -21,7 +29,7 @@ impl Truck {
         return self.num_40_foot_containers;
     }
 
-    pub fn get_fuel(&self) -> u32 {
+    pub fn get_fuel(&self) -> f32 {
         return self.fuel;
     }
 }
@@ -39,13 +47,21 @@ pub struct Config {
     empty_delivery: usize,
     afs: usize,
     trucks: Vec<Truck>,
+    ///in km, value is 5/6 of time_matrix
     distance_matrix: Vec<u32>,
+    ///in minutes, value is 6/5 of time_matrix
     time_matrix: Vec<u32>,
+    ///in minutes
     depot_service_time: u32,
+    ///in minutes
     service_times: Vec<u32>,
+    ///in minutes
     earliest_visiting_times: Vec<u32>,
+    ///in minutes
     latest_visiting_times: Vec<u32>,
+    ///in minutes
     matrix_dimension: usize,
+    ///requests
     requests: Vec<ContainerRequest>,
 }
 impl Config {

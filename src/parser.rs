@@ -148,13 +148,11 @@ fn parse_requests(identifier: &DataIdentifier, base_path: &Path) -> Vec<Containe
     let request_number = identifier.get_request_number();
     let mut request_vec = Vec::with_capacity(request_number);
     let path = base_path.join(identifier.get_demand_file_name());
-    println!("Parsing {} ...", path.display());
     let demand_string = fs::read_to_string(path).unwrap();
     let mut demand_entries = demand_string.split_whitespace();
     for _ in 0..request_number {
         let full_20 = demand_entries.next().unwrap().parse().unwrap();
         let empty_20 = demand_entries.next().unwrap().parse().unwrap();
-        println!("empty_20: {}", empty_20);
         let full_40 = demand_entries.next().unwrap().parse().unwrap();
         let empty_40 = demand_entries.next().unwrap().parse().unwrap();
         let request = ContainerRequest {
@@ -267,7 +265,7 @@ mod parser_test {
         let truck = config.get_truck(4);
         assert_eq!(truck.get_num_20_foot_containers(), 2);
         assert_eq!(truck.get_num_40_foot_containers(), 0);
-        assert_eq!(truck.get_fuel(), 285);
+        assert_eq!(truck.get_fuel(), 285.);
         //times
         assert_eq!(config.get_depot_service_time(), 0);
         assert_eq!(config.get_service_time(0), 10);
