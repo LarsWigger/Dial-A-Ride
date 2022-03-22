@@ -1,4 +1,5 @@
 use crate::data::Config;
+use crate::data::ContainerRequest;
 use crate::data::Truck;
 use std::fs;
 use std::path::Path;
@@ -33,7 +34,7 @@ impl DataIdentifier {
         };
     }
     fn get_matrix_dimension(&self) -> usize {
-        return (2 * self.full_pickup) + self.empty_pickup + self.empty_delivery + self.afs + 2;
+        return self.get_request_number() + self.afs + 2;
     }
     fn get_matrix_file_ending(&self) -> String {
         return format!(
@@ -67,10 +68,19 @@ impl DataIdentifier {
     fn get_variables_file_name(&self) -> String {
         return format!(
             "variables{}_N{}_T{}_P_No{}.txt",
-            self.get_matrix_dimension() - 2 - self.afs,
+            self.get_request_number(),
             self.t_max,
             self.full_pickup,
             self.sample_number
+        );
+    }
+    fn get_request_number(&self) -> usize {
+        return 2 * self.full_pickup + self.empty_pickup + self.empty_delivery;
+    }
+    fn get_demand_file_name(&self) -> String {
+        return format!(
+            "demand{}_F{}_P{}_D.txt",
+            self.full_pickup, self.empty_pickup, self.empty_delivery
         );
     }
 }
@@ -112,8 +122,12 @@ pub fn parse(
     let mut time_matrix = Vec::with_capacity(matrix_size);
     let time_matrix_path = base_path.join(identifier.get_time_matrix_file_name());
     parse_matrix(&time_matrix_path, &mut time_matrix);
+    //parse time constraints
     let (depot_service_time, service_times, earliest_visiting_times, latest_visiting_times) =
         parse_time_constraints(&identifier, &base_path);
+    //parse requests
+    let requests = parse_requests(&identifier, &base_path);
+    //create and return config
     return Config::new(
         full_pickup,
         empty_pickup,
@@ -126,7 +140,32 @@ pub fn parse(
         service_times,
         earliest_visiting_times,
         latest_visiting_times,
+        requests,
     );
+}
+
+fn parse_requests(identifier: &DataIdentifier, base_path: &Path) -> Vec<ContainerRequest> {
+    let request_number = identifier.get_request_number();
+    let mut request_vec = Vec::with_capacity(request_number);
+    let path = base_path.join(identifier.get_demand_file_name());
+    println!("Parsing {} ...", path.display());
+    let demand_string = fs::read_to_string(path).unwrap();
+    let mut demand_entries = demand_string.split_whitespace();
+    for _ in 0..request_number {
+        let full_20 = demand_entries.next().unwrap().parse().unwrap();
+        let empty_20 = demand_entries.next().unwrap().parse().unwrap();
+        println!("empty_20: {}", empty_20);
+        let full_40 = demand_entries.next().unwrap().parse().unwrap();
+        let empty_40 = demand_entries.next().unwrap().parse().unwrap();
+        let request = ContainerRequest {
+            full_20,
+            empty_20,
+            full_40,
+            empty_40,
+        };
+        request_vec.push(request);
+    }
+    return request_vec;
 }
 
 fn parse_num_trucks_and_t_max(identifier: &mut DataIdentifier, base_path: &Path) {
@@ -239,5 +278,26 @@ mod parser_test {
         assert_eq!(config.get_empty_pickup(), 2);
         assert_eq!(config.get_empty_delivery(), 2);
         assert_eq!(config.get_afs(), 2);
+        //request
+        let request = config.get_request(0);
+        assert_eq!(request.full_20, 1);
+        assert_eq!(request.empty_20, 0);
+        assert_eq!(request.full_40, 0);
+        assert_eq!(request.empty_40, 0);
+        let request = config.get_request(1);
+        assert_eq!(request.full_20, 1);
+        assert_eq!(request.empty_20, 0);
+        assert_eq!(request.full_40, 0);
+        assert_eq!(request.empty_40, 0);
+        let request = config.get_request(3);
+        assert_eq!(request.full_20, 0);
+        assert_eq!(request.empty_20, 1);
+        assert_eq!(request.full_40, 0);
+        assert_eq!(request.empty_40, 0);
+        let request = config.get_request(7);
+        assert_eq!(request.full_20, 0);
+        assert_eq!(request.empty_20, -1);
+        assert_eq!(request.full_40, 0);
+        assert_eq!(request.empty_40, 0);
     }
 }

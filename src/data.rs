@@ -3,6 +3,7 @@ pub struct Truck {
     num_40_foot_containers: u32,
     fuel: u32,
 }
+
 impl Truck {
     pub fn new(num_20_foot_containers: u32, num_40_foot_containers: u32, fuel: u32) -> Truck {
         return Truck {
@@ -25,6 +26,13 @@ impl Truck {
     }
 }
 
+pub struct ContainerRequest {
+    pub full_20: i32,
+    pub empty_20: i32,
+    pub full_40: i32,
+    pub empty_40: i32,
+}
+
 pub struct Config {
     full_pickup: usize,
     empty_pickup: usize,
@@ -38,6 +46,7 @@ pub struct Config {
     earliest_visiting_times: Vec<u32>,
     latest_visiting_times: Vec<u32>,
     matrix_dimension: usize,
+    requests: Vec<ContainerRequest>,
 }
 impl Config {
     pub fn new(
@@ -52,6 +61,7 @@ impl Config {
         service_times: Vec<u32>,
         earliest_visiting_times: Vec<u32>,
         latest_visiting_times: Vec<u32>,
+        requests: Vec<ContainerRequest>,
     ) -> Config {
         let matrix_dimension = (2 * full_pickup) + empty_pickup + empty_delivery + afs + 2;
         return Config {
@@ -67,6 +77,7 @@ impl Config {
             earliest_visiting_times,
             latest_visiting_times,
             matrix_dimension,
+            requests,
         };
     }
     pub fn get_distance_between(&self, i: usize, j: usize) -> u32 {
@@ -104,5 +115,8 @@ impl Config {
     }
     pub fn get_afs(&self) -> usize {
         return self.afs;
+    }
+    pub fn get_request(&self, index: usize) -> &ContainerRequest {
+        return &self.requests[index];
     }
 }
