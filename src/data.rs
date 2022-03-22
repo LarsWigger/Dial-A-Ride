@@ -41,6 +41,8 @@ pub struct ContainerRequest {
     pub empty_40: i32,
 }
 
+const FUEL_CONSUMPTION_PER_KM: f32 = 0.45;
+
 pub struct Config {
     full_pickup: usize,
     empty_pickup: usize,
@@ -96,11 +98,11 @@ impl Config {
             requests,
         };
     }
-    pub fn get_distance_between(&self, i: usize, j: usize) -> u32 {
-        return self.distance_matrix[i * self.matrix_dimension + j];
+    pub fn get_distance_between(&self, from: usize, to: usize) -> u32 {
+        return self.distance_matrix[from * self.matrix_dimension + to];
     }
-    pub fn get_time_between(&self, i: usize, j: usize) -> u32 {
-        return self.time_matrix[i * self.matrix_dimension + j];
+    pub fn get_time_between(&self, from: usize, to: usize) -> u32 {
+        return self.time_matrix[from * self.matrix_dimension + to];
     }
     pub fn get_num_trucks(&self) -> usize {
         return self.trucks.len();
@@ -134,5 +136,8 @@ impl Config {
     }
     pub fn get_request(&self, index: usize) -> &ContainerRequest {
         return &self.requests[index];
+    }
+    pub fn fuel_needed_for_route(&self, from: usize, to: usize) -> f32 {
+        return (self.get_distance_between(from, to) as f32) * FUEL_CONSUMPTION_PER_KM;
     }
 }
