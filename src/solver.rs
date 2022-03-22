@@ -8,6 +8,10 @@ mod solver_data {
     use crate::data::Truck;
     use std::collections::HashMap;
 
+    struct Route {
+        route: Vec<usize>,
+        truck_index: usize,
+    }
     pub struct KnownOptions {
         map: HashMap<u64, Route>,
     }
@@ -17,25 +21,6 @@ mod solver_data {
             let map = HashMap::new();
             return KnownOptions { map };
         }
-    }
-
-    struct Route {
-        route: Vec<usize>,
-        truck_index: usize,
-    }
-
-    enum PreviousState {
-        NoPrevious,
-        Previous(Box<SearchState>),
-    }
-
-    pub struct SearchState {
-        current_node: usize,
-        path_options: Vec<PathOption>,
-        container_1: ContainerType,
-        container_2: ContainerType,
-        requests_visisted: u64,
-        previous_state: PreviousState,
     }
 
     pub struct PathOption {
@@ -59,6 +44,20 @@ mod solver_data {
                 path,
             };
         }
+    }
+
+    enum PreviousState {
+        NoPrevious,
+        Previous(Box<SearchState>),
+    }
+
+    pub struct SearchState {
+        current_node: usize,
+        path_options: Vec<PathOption>,
+        container_1: ContainerType,
+        container_2: ContainerType,
+        requests_visisted: u64,
+        previous_state: PreviousState,
     }
 
     impl SearchState {
@@ -86,10 +85,6 @@ mod solver_data {
             //request binary is all 0 with 1 at the request index from the right
             let request_binary: u64 = 1 << request;
             self.requests_visisted = self.requests_visisted | request_binary;
-        }
-
-        pub fn next_step(&self, path_options: Vec<PathOption>) -> SearchState {
-            panic!("Placeholder next_step()");
         }
 
         pub fn route_to_node(&self, config: &Config, node: usize) -> SearchState {
