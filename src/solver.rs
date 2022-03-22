@@ -23,25 +23,34 @@ mod solver_data {
         }
     }
 
-    pub struct PathOption {
+    struct PathOption {
         fuel_level: f32,
         total_distance: u32,
         total_time: u32,
         path: Vec<usize>,
+        previous_index: usize,
     }
 
     impl PathOption {
         pub fn new(
-            fuel_level: f32,
-            total_distance: u32,
-            total_time: u32,
-            path: Vec<usize>,
+            config: &Config,
+            previous_option: &PathOption,
+            previous_index: usize,
+            to: usize,
         ) -> PathOption {
+            let from = previous_option.path[previous_option.path.len()];
+            let fuel_needed = config.fuel_needed_for_route(from, to);
+            let total_distance =
+                previous_option.total_distance + config.get_distance_between(from, to);
+            let total_time = previous_option.total_time + config.get_time_between(from, to);
+            let mut path = Vec::with_capacity(2);
+            path.push(to);
             return PathOption {
-                fuel_level,
+                fuel_level: previous_option.fuel_level - fuel_needed,
                 total_distance,
                 total_time,
                 path,
+                previous_index,
             };
         }
     }
@@ -52,6 +61,7 @@ mod solver_data {
     }
 
     pub struct SearchState {
+        ///current node in the distance/time matrix
         current_node: usize,
         path_options: Vec<PathOption>,
         container_1: ContainerType,
@@ -62,7 +72,14 @@ mod solver_data {
 
     impl SearchState {
         pub fn new(fuel_level: f32) -> SearchState {
-            let path_options = Vec::with_capacity(4);
+            let mut path_options = Vec::with_capacity(1);
+            path_options.push(PathOption {
+                fuel_level,
+                total_distance: 0,
+                total_time: 0,
+                path: Vec::with_capacity(0),
+                previous_index: 0,
+            });
             let search_state = SearchState {
                 current_node: 0,
                 path_options,
@@ -88,6 +105,14 @@ mod solver_data {
         }
 
         pub fn route_to_node(&self, config: &Config, node: usize) -> SearchState {
+            let mut path_options = Vec::with_capacity(4);
+            let fuel_needed_directly = config.fuel_needed_for_route(self.current_node, node);
+            for (index, option) in self.path_options.iter().enumerate() {
+                let option = &self.path_options[index];
+                if option.fuel_level > fuel_needed_directly {
+                    path_options.push(PathOption::new(config, &option, index, node));
+                }
+            }
             panic!("Unimplemented");
         }
     }
