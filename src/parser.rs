@@ -27,7 +27,7 @@ impl DataIdentifier {
         );
     }
     fn get_data_type(&self) -> &str {
-        if (self.full_pickup > self.empty_delivery) {
+        if self.full_pickup > self.empty_delivery {
             return "A";
         } else {
             return "B";
@@ -177,10 +177,10 @@ fn parse_num_trucks_and_t_max(identifier: &mut DataIdentifier, base_path: &Path)
     }
     let mut entries = lines.next().unwrap().split_whitespace();
     for i in 0..10 {
-        if (i == 2) {
+        if i == 2 {
             //num_trucks
             identifier.num_trucks = entries.next().unwrap().parse().unwrap();
-        } else if (i == 7) {
+        } else if i == 7 {
             identifier.t_max = entries.next().unwrap().parse().unwrap();
         } else {
             _ = entries.next();
@@ -277,22 +277,22 @@ mod parser_test {
         assert_eq!(config.get_empty_delivery(), 2);
         assert_eq!(config.get_afs(), 2);
         //request
-        let request = config.get_request(0);
+        let request = config.get_request_at_node(1);
         assert_eq!(request.full_20, 1);
         assert_eq!(request.empty_20, 0);
         assert_eq!(request.full_40, 0);
         assert_eq!(request.empty_40, 0);
-        let request = config.get_request(1);
+        let request = config.get_request_at_node(2);
         assert_eq!(request.full_20, 1);
         assert_eq!(request.empty_20, 0);
         assert_eq!(request.full_40, 0);
         assert_eq!(request.empty_40, 0);
-        let request = config.get_request(3);
+        let request = config.get_request_at_node(4);
         assert_eq!(request.full_20, 0);
         assert_eq!(request.empty_20, 1);
         assert_eq!(request.full_40, 0);
         assert_eq!(request.empty_40, 0);
-        let request = config.get_request(7);
+        let request = config.get_request_at_node(8);
         assert_eq!(request.full_20, 0);
         assert_eq!(request.empty_20, -1);
         assert_eq!(request.full_40, 0);

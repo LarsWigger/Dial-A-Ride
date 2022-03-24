@@ -71,7 +71,7 @@ mod solver_data {
             previous_index: usize,
             to: usize,
         ) -> Option<PathOption> {
-            let from = self.path[self.path.len()];
+            let from = self.path[self.path.len() - 1];
             let fuel_needed = config.fuel_needed_for_route(from, to);
             let fuel_level = self.fuel_level - fuel_needed;
             if fuel_level <= 0.0 {
@@ -147,12 +147,14 @@ mod solver_data {
     impl SearchState {
         ///Creates the initial `SearchState` at the depot with the given `fuel_capacity`, no actions taken so far
         pub fn start_state(fuel_level: f32) -> SearchState {
+            let mut path = Vec::with_capacity(1);
+            path.push(0);
             let mut path_options = Vec::with_capacity(1);
             path_options.push(PathOption {
                 fuel_level,
                 total_distance: 0,
                 total_time: 0,
-                path: Vec::with_capacity(0),
+                path,
                 previous_index: 0,
             });
             let search_state = SearchState {
@@ -401,7 +403,7 @@ mod routing_tests {
     #[test]
     fn route_0_to_1() {
         let config = parser::parse(2, 2, 2, 2, 1, 2);
-        let search_state = SearchState::start_state(config.get_truck(0).get_fuel());
-        let path_options = search_state.route_to_node(&config, 1);
+        let mut base_state = SearchState::start_state(config.get_truck(0).get_fuel());
+        base_state.route_to_node(&config, 1);
     }
 }
