@@ -7,6 +7,8 @@ mod solver_data {
     use crate::data::Truck;
     use std::collections::HashMap;
 
+    ///Represents the type of container currently loaded. The full containers are additionally identified by the pickup request for them.
+    /// For the empty containers, this makes no difference at all.
     #[derive(Eq, PartialEq, Copy, Clone)]
     enum ContainerType {
         ///a full 20 foot container for the specific full container pickup request
@@ -19,15 +21,6 @@ mod solver_data {
         Empty40,
         ///no container at all
         NoContainer,
-    }
-
-    impl ContainerType {
-        pub fn isNoContainer(&self) -> bool {
-            return match self {
-                NoContainer => true,
-                _ => false,
-            };
-        }
     }
 
     struct Route {
@@ -45,32 +38,59 @@ mod solver_data {
         }
     }
 
+    ///Represents a single PathOption. When navigating between two nodes, stops at fuel stations might be necessary or optional.
+    /// These multiple possible paths differ in three summary values that are relevant for us:
+    /// - `fuel_level`: The fuel level of the vehicle at the last node
+    /// - `total_distance`: The total distance travelled by the vehicle at the last node. Should be as low as possible, but a different route may be longer but have more fuel remaining
+    /// - `total_time`: The total time, might include waiting and fueling times
+    ///
+    /// The concrete path is not relevant for the comparison of different paths, these three summary values describe it completely.
     struct PathOption {
+        ///the fuel level of the vehicle at the last node
         fuel_level: f32,
+        ///the total distance travelled by the vehicle at the last node
         total_distance: u32,
+        ///the total
         total_time: u32,
+        ///the nodes traversed in this path
         path: Vec<usize>,
+        ///the index of the previous `PathOption` this one uses as a base
         previous_index: usize,
     }
 
     impl PathOption {
-        ///Creates a new path option that is reached from the state described in `config` and `previous_option`
-        /// (as well as its index, which needs to be passed separately) to the node `to`. If this is not possible due to little fuel, `None` is returned.
+        ///Creates a new path option that exands itself (`self`) to `to`. `config` and `previous_option`
+        /// are needed for context, `previous_option` is the index of the original `path_option` in the last `SearchState`.
+        /// Takes request service and visiting times into account as well as refueling times.
+        /// Returns `None` if there is no possible path, which may be if:
+        /// - fuel is insufficient
+        /// - arrival time is too late
         pub fn next_path_option(
+            &self,
             config: &Config,
-            previous_option: &PathOption,
             previous_index: usize,
             to: usize,
         ) -> Option<PathOption> {
-            let from = previous_option.path[previous_option.path.len()];
+            let from = self.path[self.path.len()];
             let fuel_needed = config.fuel_needed_for_route(from, to);
-            let fuel_level = previous_option.fuel_level - fuel_needed;
+            let fuel_level = self.fuel_level - fuel_needed;
             if fuel_level <= 0.0 {
                 return None;
             }
-            let total_distance =
-                previous_option.total_distance + config.get_distance_between(from, to);
-            let total_time = previous_option.total_time + config.get_time_between(from, to);
+            //deal with handling and refueling times
+            let mut total_time = self.total_time + config.get_time_between(from, to);
+            //request handling times
+            if to < config.get_first_afs() {
+                //can request still be processed?
+                if total_time > config.get_latest_visiting_time(to) {
+                    return None;
+                } else if total_time < config.get_earliest_visiting_time(to) {
+                    //have to wait
+                    total_time = config.get_earliest_visiting_time(to)
+                }
+                total_time += config.get_service_time(to);
+            }
+            let total_distance = self.total_distance + config.get_distance_between(from, to);
             let mut path = Vec::with_capacity(2);
             path.push(to);
             return Some(PathOption {
@@ -82,7 +102,7 @@ mod solver_data {
             });
         }
 
-        ///If `other` is at the same node and none of its `fuel_level`, `total_distance` or `total_time` is better than that of `self`, true is returned, otherwise false
+        ///If `other` is at the same node and none of its `fuel_level`, `total_distance` or `total_time` is better than that of `self`, `true` is returned, otherwise `false`
         pub fn completely_superior_to(&self, other: &PathOption) -> bool {
             return (self.fuel_level >= other.fuel_level)
                 && (self.total_distance <= other.total_distance)
@@ -103,6 +123,7 @@ mod solver_data {
         }
     }
 
+    ///There may or may not be a `next_state`
     enum NextState {
         NoNext,
         Next(Box<SearchState>),
@@ -111,15 +132,21 @@ mod solver_data {
     pub struct SearchState {
         ///current node in the distance/time matrix
         current_node: usize,
+        ///all the paths leading from the previous `SearchState` to `current_node`, sorted
         path_options: Vec<PathOption>,
+        ///the currently loaded first container
         container_1: ContainerType,
+        ///the currently loaded second container
         container_2: ContainerType,
+        ///the requests that have been visited so far, binary encoding for efficiency
         requests_visisted: u64,
+        ///the next state after this one, may or may not exist and may be overwritten later
         next_state: NextState,
     }
 
     impl SearchState {
-        pub fn new(fuel_level: f32) -> SearchState {
+        ///Creates the initial `SearchState` at the depot with the given `fuel_capacity`, no actions taken so far
+        pub fn start_state(fuel_level: f32) -> SearchState {
             let mut path_options = Vec::with_capacity(1);
             path_options.push(PathOption {
                 fuel_level,
@@ -139,9 +166,11 @@ mod solver_data {
             return search_state;
         }
 
+        ///Creates and appends `next_state`. `path_options` was calculated beforehand and is also sorted by this function before its insertion
         fn create_and_append_next_state(&mut self, config: &Config, path_options: Vec<PathOption>) {
             //this function should only be called when at least one path exists
             let current_node = path_options[0].get_current_node();
+            //TODO: sort path_options
             let mut new_state = SearchState {
                 current_node,
                 path_options,
@@ -220,9 +249,9 @@ mod solver_data {
         fn load_container(&mut self, load_container: ContainerType, number: i32) {
             assert!(number > 0);
             for _ in 0..number {
-                if self.container_1.isNoContainer() {
+                if self.container_1 == ContainerType::NoContainer {
                     self.container_1 = load_container;
-                } else if self.container_2.isNoContainer() {
+                } else if self.container_2 == ContainerType::NoContainer {
                     self.container_2 = load_container;
                 } else {
                     panic!("INVALID STATE");
@@ -230,6 +259,7 @@ mod solver_data {
             }
         }
 
+        ///Returns whether the given `request` has been visited, makes the binary encoding more accessible
         pub fn get_request_visited(&self, request: usize) -> bool {
             //request binary is all 0 with 1 at the request index from the right
             let request_binary: u64 = 1 << request;
@@ -237,39 +267,40 @@ mod solver_data {
             return request_result != 0;
         }
 
+        ///Sets the given `request` as visited, makes the binary encoding more accessible
         fn set_request_visited(&mut self, request: usize) {
             //request binary is all 0 with 1 at the request index from the right
             let request_binary: u64 = 1 << request;
             self.requests_visisted = self.requests_visisted | request_binary;
         }
 
-        pub fn route_to_node(&mut self, config: &Config, node: usize) -> bool {
+        /// Calculates all the relevant routes from the current state to the target node and saves the resulting `SearchState`
+        /// to `next_state`. May not find a path, so the `next_state` may be `NoNext`
+        pub fn route_to_node(&mut self, config: &Config, node: usize) {
             let mut path_options = Vec::with_capacity(4);
-            let fuel_needed_directly = config.fuel_needed_for_route(self.current_node, node);
             //first step, use previous ones to go directly to node
             for (index, option) in self.path_options.iter().enumerate() {
-                let new_option = PathOption::next_path_option(config, option, index, node);
+                let new_option = option.next_path_option(config, index, node);
                 SearchState::possibly_add_to_path_options(&mut path_options, new_option);
             }
             //second step, go to AFS in order to try reaching the node from there (possibly even chaining multiple AFS)
             for (index, option) in self.path_options.iter().enumerate() {
                 for afs in config.get_first_afs()..config.get_first_afs() + config.get_afs() {
-                    let new_option = PathOption::next_path_option(config, option, index, afs);
+                    let new_option = option.next_path_option(config, index, afs);
                     SearchState::possibly_add_to_path_options(&mut path_options, new_option);
                 }
                 //TODO: DEAL WITH REFUELING AT DEPOT
             }
-            //third step, try using previous one to get to
+            //third step, try using previously found path_options one to find a better path to somewhere (not only the depot)
             let mut improvement_found = true;
             while improvement_found {
                 improvement_found = false;
-                //to new node
                 for (index, option) in self.path_options.iter().enumerate() {
                     //save for repeated usage:
                     let current_node = option.get_current_node();
                     //to new node
                     if option.get_current_node() != node {
-                        let new_option = PathOption::next_path_option(config, option, index, node);
+                        let new_option = option.next_path_option(config, index, node);
                         let made_change = SearchState::possibly_add_to_path_options(
                             &mut path_options,
                             new_option,
@@ -278,31 +309,34 @@ mod solver_data {
                             improvement_found = true;
                         }
                     }
-                    //to afs
-                    for afs in config.get_first_afs()..config.get_first_afs() + config.get_afs() {
-                        if current_node != afs {
-                            let new_option =
-                                PathOption::next_path_option(config, option, index, node);
-                            let made_change = SearchState::possibly_add_to_path_options(
-                                &mut path_options,
-                                new_option,
-                            );
-                            if made_change {
-                                improvement_found = true;
+                    //refueling, makes no sense starting from the target node
+                    if current_node != node {
+                        //to afs
+                        for afs in config.get_first_afs()..config.get_first_afs() + config.get_afs()
+                        {
+                            //routing from itself to itself is completely pointless
+                            if current_node != afs {
+                                let new_option = option.next_path_option(config, index, node);
+                                let made_change = SearchState::possibly_add_to_path_options(
+                                    &mut path_options,
+                                    new_option,
+                                );
+                                if made_change {
+                                    improvement_found = true;
+                                }
                             }
                         }
+                        //TODO: DEAL WITH REFUELING AT DEPOT
                     }
-                    //TODO: DEAL WITH REFUELING AT DEPOT
                 }
             }
             //fourth step, remove anything that does not end at the depot
             path_options.retain(|x| x.get_current_node() == node);
             if path_options.len() == 0 {
-                //no path found
-                return false;
+                //no path found, overwrite just in case
+                self.next_state = NextState::NoNext;
             } else {
                 self.create_and_append_next_state(config, path_options);
-                return true;
             }
         }
 
@@ -321,7 +355,7 @@ mod solver_data {
             let original_length = path_options.len();
             //remove the entries that are completely inferior to the new one (CAN THIS EVEN HAPPEN?)
             path_options.retain(|x| !unpacked_option.completely_superior_to(&x));
-            if (original_length != path_options.len()) {
+            if original_length != path_options.len() {
                 //something was removed
                 path_options.push(unpacked_option);
                 return true;
@@ -346,7 +380,7 @@ pub fn solve(config: &Config) {}
 fn solve_for_truck(config: &Config, truck_index: usize) -> KnownOptions {
     let mut known_options = KnownOptions::new();
     let truck = config.get_truck(truck_index);
-    let root_state = SearchState::new(truck.get_fuel());
+    let root_state = SearchState::start_state(truck.get_fuel());
     solve_for_truck_recursive(config, &truck, &mut known_options, &root_state);
     return known_options;
 }
@@ -367,7 +401,7 @@ mod routing_tests {
     #[test]
     fn route_0_to_1() {
         let config = parser::parse(2, 2, 2, 2, 1, 2);
-        let search_state = SearchState::new(config.get_truck(0).get_fuel());
+        let search_state = SearchState::start_state(config.get_truck(0).get_fuel());
         let path_options = search_state.route_to_node(&config, 1);
     }
 }
