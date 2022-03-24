@@ -68,6 +68,7 @@ mod solver_data {
         pub fn next_path_option(
             &self,
             config: &Config,
+            truck: &Truck,
             previous_index: usize,
             to: usize,
         ) -> Option<PathOption> {
@@ -76,7 +77,7 @@ mod solver_data {
             if fuel_needed > self.fuel_level {
                 return None;
             }
-            let fuel_level = self.fuel_level - fuel_needed;
+            let mut fuel_level = self.fuel_level - fuel_needed;
             //deal with handling and refueling times
             let mut total_time = self.total_time + config.get_time_between(from, to);
             //request handling times
@@ -89,6 +90,11 @@ mod solver_data {
                     total_time = config.get_earliest_visiting_time(to)
                 }
                 total_time += config.get_service_time(to);
+            }
+            //refueling
+            if config.get_first_afs() <= to && to < config.get_dummy_depot() {
+                total_time += truck.get_minutes_for_refueling(fuel_level);
+                fuel_level = truck.get_fuel();
             }
             let total_distance = self.total_distance + config.get_distance_between(from, to);
             let mut path = Vec::with_capacity(2);
@@ -279,17 +285,17 @@ mod solver_data {
 
         /// Calculates all the relevant routes from the current state to the target node and saves the resulting `SearchState`
         /// to `next_state`. May not find a path, so the `next_state` may be `NoNext`
-        pub fn route_to_node(&mut self, config: &Config, node: usize) {
+        pub fn route_to_node(&mut self, config: &Config, truck: &Truck, node: usize) {
             let mut path_options = Vec::with_capacity(4);
             //first step, use previous ones to go directly to node
             for (index, option) in self.path_options.iter().enumerate() {
-                let new_option = option.next_path_option(config, index, node);
+                let new_option = option.next_path_option(config, truck, index, node);
                 SearchState::possibly_add_to_path_options(&mut path_options, new_option);
             }
             //second step, go to AFS in order to try reaching the node from there (possibly even chaining multiple AFS)
             for (index, option) in self.path_options.iter().enumerate() {
                 for afs in config.get_first_afs()..config.get_first_afs() + config.get_afs() {
-                    let new_option = option.next_path_option(config, index, afs);
+                    let new_option = option.next_path_option(config, truck, index, afs);
                     SearchState::possibly_add_to_path_options(&mut path_options, new_option);
                 }
                 //TODO: DEAL WITH REFUELING AT DEPOT
@@ -303,7 +309,7 @@ mod solver_data {
                     let current_node = option.get_current_node();
                     //to new node
                     if option.get_current_node() != node {
-                        let new_option = option.next_path_option(config, index, node);
+                        let new_option = option.next_path_option(config, truck, index, node);
                         let made_change = SearchState::possibly_add_to_path_options(
                             &mut path_options,
                             new_option,
@@ -319,7 +325,8 @@ mod solver_data {
                         {
                             //routing from itself to itself is completely pointless
                             if current_node != afs {
-                                let new_option = option.next_path_option(config, index, node);
+                                let new_option =
+                                    option.next_path_option(config, truck, index, node);
                                 let made_change = SearchState::possibly_add_to_path_options(
                                     &mut path_options,
                                     new_option,
@@ -405,6 +412,6 @@ mod routing_tests {
     fn route_0_to_1() {
         let config = parser::parse(2, 2, 2, 2, 1, 2);
         let mut base_state = SearchState::start_state(config.get_truck(0).get_fuel());
-        base_state.route_to_node(&config, 1);
+        base_state.route_to_node(&config, config.get_truck(0), 1);
     }
 }
