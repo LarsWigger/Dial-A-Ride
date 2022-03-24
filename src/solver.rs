@@ -123,12 +123,13 @@ mod solver_data {
         }
     }
 
-    ///There may or may not be a `next_state`
+    ///There may or may not be a `next_state` for a `SearchState`, this little enum (effectively an Option) covers that.
     enum NextState {
         NoNext,
         Next(Box<SearchState>),
     }
 
+    ///Represents the current state of the search. Each SearchState is at either a request node or a depot, AFS are covered in the `PathOption`s.
     pub struct SearchState {
         ///current node in the distance/time matrix
         current_node: usize,
