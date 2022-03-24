@@ -1,11 +1,3 @@
-pub enum ContainerType {
-    Full20,
-    Empty20,
-    Full40,
-    Empty40,
-    NoContainer,
-}
-
 pub struct Truck {
     num_20_foot_containers: u32,
     num_40_foot_containers: u32,
@@ -134,10 +126,17 @@ impl Config {
     pub fn get_afs(&self) -> usize {
         return self.afs;
     }
-    pub fn get_request(&self, index: usize) -> &ContainerRequest {
-        return &self.requests[index];
+    pub fn get_request_at_node(&self, node: usize) -> &ContainerRequest {
+        return &self.requests[node - 1];
     }
     pub fn fuel_needed_for_route(&self, from: usize, to: usize) -> f32 {
         return (self.get_distance_between(from, to) as f32) * FUEL_CONSUMPTION_PER_KM;
+    }
+    pub fn get_first_afs(&self) -> usize {
+        return 2 * self.full_pickup + self.empty_pickup + self.empty_delivery + 1;
+    }
+    pub fn get_pick_node_for_full_dropoff(&self, dropoff_node: usize) -> usize {
+        assert!(self.empty_pickup + self.full_pickup < dropoff_node);
+        return dropoff_node - self.empty_pickup - self.full_pickup;
     }
 }

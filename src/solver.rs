@@ -7,7 +7,7 @@ mod solver_data {
     use crate::data::Truck;
     use std::collections::HashMap;
 
-    #[derive(Eq, PartialEq)]
+    #[derive(Eq, PartialEq, Copy, Clone)]
     enum ContainerType {
         ///a full 20 foot container for the specific full container pickup request
         Full20(usize),
@@ -139,11 +139,7 @@ mod solver_data {
             return search_state;
         }
 
-        fn create_next_one_changing_containers(
-            &self,
-            config: &Config,
-            path_options: Vec<PathOption>,
-        ) -> &SearchState {
+        fn create_and_append_next_state(&mut self, config: &Config, path_options: Vec<PathOption>) {
             //this function should only be called when at least one path exists
             let current_node = path_options[0].get_current_node();
             let mut new_state = SearchState {
@@ -159,10 +155,9 @@ mod solver_data {
                 new_state.handle_request_containers(config);
             }
             self.next_state = NextState::Next(Box::new(new_state));
-            return &new_state;
         }
 
-        ///Adjusts the containers at the request node the state is currently at and marks this request as visited afterwards
+        ///Adjusts the containers at the request node the state is currently at and marks this request as visited afterwards.
         /// Must only be called when the current node is a request (unchecked) and the request has not been visited before (checked)
         fn handle_request_containers(&mut self, config: &Config) {
             //request no already handled:
@@ -170,20 +165,22 @@ mod solver_data {
             let request = config.get_request_at_node(self.current_node);
             //handle deload first in case load and deload happen at the same node (should not happen)
             if request.full_20 < 0 {
-                let unloaded_container = ContainerType::Empty20;
+                let unloaded_container =
+                    ContainerType::Full20(config.get_pick_node_for_full_dropoff(self.current_node));
                 self.unload_container(unloaded_container, request.full_20);
             }
             if request.full_40 < 0 {
-                let unloaded_container = ContainerType::Empty20;
-                self.unload_container(unloaded_container, request.full_20);
+                let unloaded_container =
+                    ContainerType::Full40(config.get_pick_node_for_full_dropoff(self.current_node));
+                self.unload_container(unloaded_container, request.full_40);
             }
             if request.empty_20 < 0 {
                 let unloaded_container = ContainerType::Empty20;
-                self.unload_container(unloaded_container, request.full_20);
+                self.unload_container(unloaded_container, request.empty_20);
             }
             if request.empty_40 < 0 {
-                let unloaded_container = ContainerType::Empty20;
-                self.unload_container(unloaded_container, request.full_20);
+                let unloaded_container = ContainerType::Empty40;
+                self.unload_container(unloaded_container, request.empty_20);
             }
             //handle load
             if request.full_20 > 0 {
@@ -246,7 +243,7 @@ mod solver_data {
             self.requests_visisted = self.requests_visisted | request_binary;
         }
 
-        pub fn route_to_node(&self, config: &Config, node: usize) -> Option<&SearchState> {
+        pub fn route_to_node(&mut self, config: &Config, node: usize) -> bool {
             let mut path_options = Vec::with_capacity(4);
             let fuel_needed_directly = config.fuel_needed_for_route(self.current_node, node);
             //first step, use previous ones to go directly to node
@@ -302,10 +299,10 @@ mod solver_data {
             path_options.retain(|x| x.get_current_node() == node);
             if path_options.len() == 0 {
                 //no path found
-                return None;
+                return false;
             } else {
-                let result = self.create_next_one_changing_containers(config, path_options);
-                return Some(result);
+                self.create_and_append_next_state(config, path_options);
+                return true;
             }
         }
 
