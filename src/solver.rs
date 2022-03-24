@@ -46,8 +46,8 @@ mod solver_data {
     ///
     /// The concrete path is not relevant for the comparison of different paths, these three summary values describe it completely.
     struct PathOption {
-        ///the fuel level of the vehicle at the last node
-        fuel_level: f32,
+        ///the fuel level of the vehicle at the last node, in 0.01l to avoid floating point operations
+        fuel_level: u32,
         ///the total distance travelled by the vehicle at the last node
         total_distance: u32,
         ///the total
@@ -73,10 +73,10 @@ mod solver_data {
         ) -> Option<PathOption> {
             let from = self.path[self.path.len() - 1];
             let fuel_needed = config.fuel_needed_for_route(from, to);
-            let fuel_level = self.fuel_level - fuel_needed;
-            if fuel_level <= 0.0 {
+            if fuel_needed > self.fuel_level {
                 return None;
             }
+            let fuel_level = self.fuel_level - fuel_needed;
             //deal with handling and refueling times
             let mut total_time = self.total_time + config.get_time_between(from, to);
             //request handling times
@@ -147,7 +147,7 @@ mod solver_data {
 
     impl SearchState {
         ///Creates the initial `SearchState` at the depot with the given `fuel_capacity`, no actions taken so far
-        pub fn start_state(fuel_level: f32) -> SearchState {
+        pub fn start_state(fuel_level: u32) -> SearchState {
             let mut path = Vec::with_capacity(1);
             path.push(0);
             let mut path_options = Vec::with_capacity(1);

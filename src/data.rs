@@ -1,15 +1,16 @@
 pub struct Truck {
     num_20_foot_containers: u32,
     num_40_foot_containers: u32,
-    fuel: f32,
+    //in 0.01l to avoid floating point operations, works only with the given consumption rate of 0.45l/km and refuel rate of 10l/min
+    fuel: u32,
 }
 
 impl Truck {
-    pub fn new(num_20_foot_containers: u32, num_40_foot_containers: u32, fuel: f32) -> Truck {
+    pub fn new(num_20_foot_containers: u32, num_40_foot_containers: u32, fuel: u32) -> Truck {
         return Truck {
             num_20_foot_containers,
             num_40_foot_containers,
-            fuel,
+            fuel: fuel * 100,
         };
     }
 
@@ -21,7 +22,7 @@ impl Truck {
         return self.num_40_foot_containers;
     }
 
-    pub fn get_fuel(&self) -> f32 {
+    pub fn get_fuel(&self) -> u32 {
         return self.fuel;
     }
 }
@@ -33,7 +34,8 @@ pub struct ContainerRequest {
     pub empty_40: i32,
 }
 
-const FUEL_CONSUMPTION_PER_KM: f32 = 0.45;
+///100*0.45$
+const FUEL_CONSUMPTION_PER_KM: u32 = 45;
 
 pub struct Config {
     full_pickup: usize,
@@ -129,8 +131,8 @@ impl Config {
     pub fn get_request_at_node(&self, node: usize) -> &ContainerRequest {
         return &self.requests[node - 1];
     }
-    pub fn fuel_needed_for_route(&self, from: usize, to: usize) -> f32 {
-        return (self.get_distance_between(from, to) as f32) * FUEL_CONSUMPTION_PER_KM;
+    pub fn fuel_needed_for_route(&self, from: usize, to: usize) -> u32 {
+        return self.get_distance_between(from, to) * FUEL_CONSUMPTION_PER_KM;
     }
     pub fn get_first_afs(&self) -> usize {
         return 2 * self.full_pickup + self.empty_pickup + self.empty_delivery + 1;
