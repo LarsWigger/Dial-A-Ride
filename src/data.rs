@@ -156,4 +156,7 @@ impl Config {
     pub fn get_dummy_depot(&self) -> usize {
         return self.matrix_dimension;
     }
+    pub fn get_first_full_dropoff(&self) -> usize {
+        return self.full_pickup + self.empty_delivery + 1;
+    }
 }
