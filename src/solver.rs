@@ -4,7 +4,6 @@ use crate::data::Truck;
 
 mod solver_data {
     use crate::data::Config;
-    use crate::data::ContainerRequest;
     use crate::data::Truck;
     use std::collections::HashMap;
     use std::rc::Rc;
@@ -308,6 +307,7 @@ mod solver_data {
         container_1: ContainerType,
         ///the currently loaded second container
         container_2: ContainerType,
+        container_data: ContainerData,
         ///the requests that have been visited so far, binary encoding for efficiency
         requests_visisted: u64,
         ///the next state after this one, may or may not exist and may be overwritten later
@@ -332,6 +332,7 @@ mod solver_data {
                 path_options,
                 container_1: ContainerType::NoContainer,
                 container_2: ContainerType::NoContainer,
+                container_data: ContainerData::new(),
                 requests_visisted: 0,
                 previous_state: Option::None,
             };
@@ -352,6 +353,7 @@ mod solver_data {
                 path_options,
                 container_1: current_state.container_1,
                 container_2: current_state.container_2,
+                container_data: ContainerData::new(),
                 requests_visisted: current_state.requests_visisted,
                 previous_state: Option::Some(new_state_reference),
             };
@@ -365,74 +367,49 @@ mod solver_data {
         ///Adjusts the containers at the request node the state is currently at and marks this request as visited afterwards.
         /// Must only be called when the current node is a request (unchecked) and the request has not been visited before (checked)
         fn handle_request_containers(&mut self, config: &Config) {
-            //request no already handled:
+            //request not already handled:
             assert!(!self.get_request_visited(self.current_node));
             let request = config.get_request_at_node(self.current_node);
-            //handle deload first in case load and deload happen at the same node (should not happen)
-            if request.full_20 < 0 {
-                let unloaded_container =
-                    ContainerType::Full20(config.get_pick_node_for_full_dropoff(self.current_node));
-                self.unload_container(unloaded_container, request.full_20);
-            }
-            if request.full_40 < 0 {
-                let unloaded_container =
-                    ContainerType::Full40(config.get_pick_node_for_full_dropoff(self.current_node));
-                self.unload_container(unloaded_container, request.full_40);
-            }
-            if request.empty_20 < 0 {
-                let unloaded_container = ContainerType::Empty20;
-                self.unload_container(unloaded_container, request.empty_20);
-            }
-            if request.empty_40 < 0 {
-                let unloaded_container = ContainerType::Empty40;
-                self.unload_container(unloaded_container, request.empty_20);
-            }
-            //handle load
-            if request.full_20 > 0 {
-                let container = ContainerType::Full20(self.current_node);
-                self.load_container(container, request.full_20);
-            }
-            if request.full_40 > 0 {
-                let container = ContainerType::Full40(self.current_node);
-                self.load_container(container, request.full_40);
-            }
-            if request.empty_20 > 0 {
-                let container = ContainerType::Empty20;
-                self.load_container(container, request.empty_20);
-            }
-            if request.empty_40 > 0 {
-                let container = ContainerType::Empty40;
-                self.load_container(container, request.empty_40);
+            if self.current_node <= config.get_full_pickup() {
+                //full pickup request
+                self.container_data.num_20 += request.full_20;
+                self.container_data.num_40 += request.full_40;
+                if self.container_data.full_requests[0] == 0 {
+                    self.container_data.full_requests[0] = self.current_node;
+                } else if self.container_data.full_requests[1] == 0 {
+                    self.container_data.full_requests[1] = self.current_node;
+                } else {
+                    panic!("THIS SHOULD NOT HAPPEN!");
+                }
+            } else if self.current_node < config.get_first_full_dropoff() {
+                //empty pickup request
+                self.container_data.empty_20 += request.empty_20;
+                self.container_data.empty_40 += request.empty_40;
+                self.container_data.num_20 += request.empty_20;
+                self.container_data.num_40 += request.empty_40;
+            } else if self.current_node < config.get_first_full_dropoff() + config.get_full_pickup()
+            {
+                //full delivery
+                let source_node = config.get_pick_node_for_full_dropoff(self.current_node);
+                let request = config.get_request_at_node(source_node);
+                self.container_data.num_20 -= request.full_20;
+                self.container_data.num_40 -= request.full_40;
+                if self.container_data.full_requests[0] == source_node {
+                    self.container_data.full_requests[0] = 0;
+                } else if self.container_data.full_requests[1] == source_node {
+                    self.container_data.full_requests[1] = 0;
+                } else {
+                    panic!("THIS SHOULD NOT HAPPEN!");
+                }
+            } else if self.current_node < config.get_first_afs() {
+                //empty delivery
+                //can also just add this because the values are negative
+                self.container_data.empty_20 += request.empty_20;
+                self.container_data.empty_40 += request.empty_40;
+                self.container_data.num_20 += request.empty_20;
+                self.container_data.num_40 += request.empty_40;
             }
             self.set_request_visited(self.current_node);
-        }
-
-        ///Unloads `-number` (it is negative, the inversion is done in the method) containers of type `unload_container`
-        fn unload_container(&mut self, unload_container: ContainerType, number: i32) {
-            assert!(number < 0);
-            for _ in 0..-number {
-                if self.container_1 == unload_container {
-                    self.container_1 = ContainerType::NoContainer;
-                } else if self.container_2 == unload_container {
-                    self.container_2 = ContainerType::NoContainer;
-                } else {
-                    panic!("INVALID STATE");
-                }
-            }
-        }
-
-        ///Loads `number` containers of type `load_container`
-        fn load_container(&mut self, load_container: ContainerType, number: i32) {
-            assert!(number > 0);
-            for _ in 0..number {
-                if self.container_1 == ContainerType::NoContainer {
-                    self.container_1 = load_container;
-                } else if self.container_2 == ContainerType::NoContainer {
-                    self.container_2 = load_container;
-                } else {
-                    panic!("INVALID STATE");
-                }
-            }
         }
 
         ///Returns whether the given `request` has been visited, makes the binary encoding more accessible.
@@ -582,38 +559,15 @@ mod solver_data {
             return (best_index, lowest_distance);
         }
 
-        pub fn get_num_containers_currently_loaded(&self) -> ContainerNumber {
-            let mut count_full_20 = 0;
-            let mut count_full_40 = 0;
-            let mut count_empty_20 = 0;
-            let mut count_empty_40 = 0;
-            match self.container_1 {
-                ContainerType::Empty20 => count_empty_20 += 1,
-                ContainerType::Full20(_) => count_full_20 += 1,
-                ContainerType::Empty40 => count_empty_40 += 1,
-                ContainerType::Full40(_) => count_full_40 += 1,
-                _ => (),
-            };
-            match self.container_2 {
-                ContainerType::Empty20 => count_empty_20 += 1,
-                ContainerType::Full20(_) => count_full_20 += 1,
-                ContainerType::Empty40 => count_empty_40 += 1,
-                ContainerType::Full40(_) => count_full_40 += 1,
-                _ => (),
-            };
-            return ContainerNumber {
-                empty_20: count_empty_20,
-                empty_40: count_empty_40,
-                num_20: count_full_20 + count_empty_20,
-                num_40: count_empty_40 + count_full_40,
-            };
+        pub fn get_container_data(&self) -> &ContainerData {
+            return &self.container_data;
         }
 
         pub fn can_handle_request(
             &self,
             config: &Config,
             truck: &Truck,
-            container_number: &ContainerNumber,
+            container_number: &ContainerData,
             request_node: usize,
         ) -> bool {
             //TODO: change container system to only allow one change per pickup, validating it in the data
@@ -666,11 +620,27 @@ mod solver_data {
         }
     }
 
-    pub struct ContainerNumber {
+    pub struct ContainerData {
         empty_20: i32,
         empty_40: i32,
         num_20: i32,
         num_40: i32,
+        full_requests: Vec<usize>,
+    }
+
+    impl ContainerData {
+        pub fn new() -> ContainerData {
+            let mut full_requests = Vec::with_capacity(2);
+            full_requests.push(0);
+            full_requests.push(0);
+            return ContainerData {
+                empty_20: 0,
+                empty_40: 0,
+                num_20: 0,
+                num_40: 0,
+                full_requests,
+            };
+        }
     }
 }
 use solver_data::*;
@@ -721,7 +691,7 @@ fn solve_for_truck_recursive(
         return; //should never be left again
     }
     //calculate number of currently loaded containers
-    let container_number = current_state.get_num_containers_currently_loaded();
+    let container_number = current_state.get_container_data();
 
     //try moving to the requests
     for request_node in 1..config.get_first_afs() {
