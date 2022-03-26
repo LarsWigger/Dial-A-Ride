@@ -468,11 +468,7 @@ mod solver_data {
             return (best_index, lowest_distance);
         }
 
-        pub fn can_handle_request(
-            config: &Config,
-            current_state: &Rc<SearchState>,
-            request_index: usize,
-        ) -> bool {
+        pub fn can_handle_request(&self, config: &Config, request_index: usize) -> bool {
             panic!("NOT IMPLEMENTED!");
         }
 
@@ -512,7 +508,7 @@ fn solve_for_truck_recursive(
     }
     //try moving to the requests
     for request_index in 1..config.get_first_afs() {
-        if SearchState::can_handle_request(config, &current_state, request_index) {
+        if current_state.can_handle_request(config, request_index) {
             let next_state =
                 SearchState::route_to_node(config, truck, &current_state, request_index);
             match next_state {
