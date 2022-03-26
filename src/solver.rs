@@ -145,6 +145,7 @@ mod solver_data {
             to: usize,
         ) -> Option<PathOption> {
             let from = self.path[self.path.len() - 1];
+            let total_distance = config.get_distance_between(from, to);
             let fuel_needed = config.fuel_needed_for_route(from, to);
             if fuel_needed > self.fuel_level {
                 return None;
@@ -168,8 +169,12 @@ mod solver_data {
                 total_time += truck.get_minutes_for_refueling(fuel_level);
                 fuel_level = truck.get_fuel();
             }
-            let total_distance = self.total_distance + config.get_distance_between(from, to);
-            let mut path = Vec::with_capacity(2);
+            //create new path
+            let new_path_len = self.path.len() + 1;
+            let mut path: Vec<usize> = Vec::with_capacity(new_path_len);
+            for i in 0..self.path.len() {
+                path.push(self.path[i]);
+            }
             path.push(to);
             return Some(PathOption {
                 fuel_level,
@@ -632,6 +637,7 @@ fn solve_for_truck_recursive(
             Option::Some(state) => depot_state = &state,
         };
     };
+    //TODO: navigate to dummy depot only when no full containers are loaded, remove unnecessary check (no, it is not unnecessary, might be the start depot)
 }
 
 #[cfg(test)]
