@@ -8,6 +8,7 @@ mod solver_data {
     use std::collections::HashMap;
     use std::rc::Rc;
 
+    ///Represents the route a single truck could take.
     pub struct Route {
         ///the nodes taken by the route, saved as u8 to save memory, order backwards to avoid reverting every single route
         reverse_path: Vec<u8>,
@@ -16,7 +17,7 @@ mod solver_data {
     }
 
     impl Route {
-        ///Creates a complete `Route` starting from `search_state`s path with index `path_index` and goes iterates over the previous_states until there is no `previous_state`
+        ///Creates a complete `Route` starting from `search_state`s path with index `path_index` and iterates over the previous_states until there is no `previous_state`
         pub fn new(search_state: &Rc<SearchState>, path_index: usize) -> Route {
             //setup for iteration
             let mut current_state = search_state;
@@ -60,7 +61,7 @@ mod solver_data {
             };
         }
 
-        ///Helper function that adds the previous
+        ///Helper function that adds `path_option` to `reverse_path` and returns the index of the next `PathOption` to be processed
         fn add_path_to_reverse_path(reverse_path: &mut Vec<u8>, path_option: &PathOption) -> usize {
             for index in (0..path_option.path.len()).rev() {
                 reverse_path.push(path_option.path[index] as u8);
@@ -68,18 +69,24 @@ mod solver_data {
             return path_option.previous_index;
         }
     }
-    pub struct KnownOptionsForTruck {
+    ///Represents all the known routes for a single truck
+    pub struct KnownRoutesForTruck {
+        ///maps the `requests_visited` bits to the best corresponding route known (so far). Route is behind smart pointer to copying later on
         map: HashMap<u64, Rc<Route>>,
-        truck_index: usize,
     }
 
-    impl KnownOptionsForTruck {
-        pub fn new(truck_index: usize) -> KnownOptionsForTruck {
+    impl KnownRoutesForTruck {
+        ///Creates a new `KnownRoutesForTruck`
+        pub fn new() -> KnownRoutesForTruck {
             //TODO: use faster hasher
             let map = HashMap::new();
-            return KnownOptionsForTruck { map, truck_index };
+            return KnownRoutesForTruck { map };
         }
 
+        ///Adds the best route from the given `search_state` if:
+        /// - there are no full containers currently loaded in `SearchState`
+        /// - there is no other known route for `search_state.requests_visited` yet
+        /// - the route in `search_state` for its `requests_visited` is better than the one already known
         pub fn possibly_add(&mut self, search_state: &Rc<SearchState>) {
             //check whether any full containers have been picked up but not delivered
             //this could not result in any proper result anyway, so we may as well prevent it here
@@ -89,7 +96,7 @@ mod solver_data {
                 return;
             }
 
-            let requests_visited = search_state.get_all_requests_visited();
+            let requests_visited = search_state.requests_visisted;
             let (best_path_index, total_distance) = search_state.get_total_distance();
             let previous_entry = self.map.get(&requests_visited);
             let save_or_overwrite;
@@ -109,29 +116,37 @@ mod solver_data {
         }
     }
 
+    ///Combines up to `config.num_trucks` routes, each corresponding to the truck at the respective index,
+    /// while also saving the summary metric of the `total_distance` of these routes
     struct CombinationOption {
+        ///summary metric, sum of the distance of the individual routes
         total_distance: u32,
+        ///the different routes, each route is for the truck at the same index
         routes: Vec<Rc<Route>>,
     }
 
+    ///Combines all the `KnownRoutesForTruck` in one summary structure
     pub struct AllKnownOptions {
+        ///maps `requests_visited` to the corresponding `CombinationOption` that is the best one known so far
         option_map: HashMap<u64, CombinationOption>,
-        num_vehicles: usize,
+        ///the number of trucks, needed for knowing how many to elements a single vector needs
+        num_trucks: usize,
     }
 
+    //possible TODO: the vectors are initialized with the maximum size even though it is not needed.
     impl AllKnownOptions {
-        pub fn new(num_vehicles: usize) -> AllKnownOptions {
+        pub fn new(num_trucks: usize) -> AllKnownOptions {
             let option_map = HashMap::new();
             return AllKnownOptions {
                 option_map,
-                num_vehicles,
+                num_trucks,
             };
         }
 
         //just copy references to all the routes into `option_map` while adjusting/initializing the slightly different format
-        pub fn initalAddition(&mut self, truck_options: &KnownOptionsForTruck) {
+        pub fn initalAddition(&mut self, truck_options: &KnownRoutesForTruck) {
             for (key, value) in &truck_options.map {
-                let mut routes = Vec::with_capacity(self.num_vehicles);
+                let mut routes = Vec::with_capacity(self.num_trucks);
                 routes.push(Rc::clone(value));
                 let option = CombinationOption {
                     routes,
@@ -141,7 +156,7 @@ mod solver_data {
             }
         }
 
-        pub fn followingAddition(&mut self, truck_options: &KnownOptionsForTruck) {
+        pub fn followingAddition(&mut self, truck_options: &KnownRoutesForTruck) {
             //performing this operation in place could lead to problems
             //since this is created completely anew and not jsut copied, all values will be for the same number of vehicles
             let mut new_map = HashMap::new();
@@ -162,7 +177,7 @@ mod solver_data {
                             Option::None => insert_into_map = true,
                         };
                         if insert_into_map {
-                            let mut combination_routes = Vec::with_capacity(self.num_vehicles);
+                            let mut combination_routes = Vec::with_capacity(self.num_trucks);
                             for route in &own_value.routes {
                                 combination_routes.push(Rc::clone(route));
                             }
@@ -386,9 +401,9 @@ mod solver_data {
         ///Returns whether the given `request` has been visited, makes the binary encoding more accessible.
         /// Indexing starts at 1 so it is consistent with the nodes (asserted)
         pub fn get_request_visited(&self, request_node: usize) -> bool {
-            assert!(request_node != 0);
+            assert!(request_node != 0 && request_node < 64);
             //request binary is all 0 with 1 at the request index from the right
-            let request_binary: u64 = 1 << request_node;
+            let request_binary: u64 = 1 << request_node - 1;
             let request_result = self.requests_visisted & request_binary;
             return request_result != 0;
         }
@@ -396,14 +411,10 @@ mod solver_data {
         ///Sets the given `request` as visited, makes the binary encoding more accessible
         ///Indexing starts at 1 so it is consistent with the nodes (asserted)
         fn set_request_visited(&mut self, request_node: usize) {
-            assert!(request_node != 0);
+            assert!(request_node != 0 && request_node < 64);
             //request binary is all 0 with 1 at the request index from the right
-            let request_binary: u64 = 1 << request_node;
+            let request_binary: u64 = 1 << request_node - 1;
             self.requests_visisted = self.requests_visisted | request_binary;
-        }
-
-        fn get_all_requests_visited(&self) -> u64 {
-            return self.requests_visisted;
         }
 
         /// Calculates all the relevant routes from `current_state` to the target node and returns the next `SearchState` alreay wrapped in `Rc`
@@ -530,15 +541,10 @@ mod solver_data {
             return (best_index, lowest_distance);
         }
 
-        pub fn get_container_data(&self) -> &ContainerData {
-            return &self.container_data;
-        }
-
         pub fn can_handle_request(
             &self,
             config: &Config,
             truck: &Truck,
-            container_number: &ContainerData,
             request_node: usize,
         ) -> bool {
             //TODO: change container system to only allow one change per pickup, validating it in the data
@@ -549,11 +555,11 @@ mod solver_data {
             let request = config.get_request_at_node(request_node);
             //only to need to check whether something can be picked up
             if request_node < config.get_first_full_dropoff() {
-                assert!(container_number.num_20 <= truck.get_num_20_foot_containers());
-                assert!(container_number.num_40 <= truck.get_num_40_foot_containers());
+                assert!(self.container_data.num_20 <= truck.get_num_20_foot_containers());
+                assert!(self.container_data.num_40 <= truck.get_num_40_foot_containers());
                 let newly_loaded_20 = request.empty_20 + request.full_20;
                 if newly_loaded_20 > 0 {
-                    if newly_loaded_20 + container_number.num_20
+                    if newly_loaded_20 + self.container_data.num_20
                         > truck.get_num_20_foot_containers()
                     {
                         return false;
@@ -561,7 +567,7 @@ mod solver_data {
                 }
                 let newly_loaded_40 = request.empty_40 + request.full_40;
                 if newly_loaded_40 > 0 {
-                    if newly_loaded_40 + container_number.num_40
+                    if newly_loaded_40 + self.container_data.num_40
                         > truck.get_num_40_foot_containers()
                     {
                         return false;
@@ -573,10 +579,10 @@ mod solver_data {
                     //just check whether the corresponging pickup request was visited
                     self.get_request_visited(config.get_pick_node_for_full_dropoff(request_node));
                 } else {
-                    if -request.empty_20 > container_number.empty_20 {
+                    if -request.empty_20 > self.container_data.empty_20 {
                         return false;
                     }
-                    if -request.empty_40 > container_number.empty_40 {
+                    if -request.empty_40 > self.container_data.empty_40 {
                         return false;
                     }
                 }
@@ -591,7 +597,7 @@ mod solver_data {
         }
     }
 
-    pub struct ContainerData {
+    struct ContainerData {
         empty_20: i32,
         empty_40: i32,
         num_20: i32,
@@ -641,10 +647,10 @@ pub fn solve(config: Config) -> Solution {
 }
 
 ///Calculates all the known options for truck at given index
-fn solve_for_truck(config: &Config, truck_index: usize) -> KnownOptionsForTruck {
+fn solve_for_truck(config: &Config, truck_index: usize) -> KnownRoutesForTruck {
     let truck = config.get_truck(truck_index);
     let root_state = SearchState::start_state(truck.get_fuel());
-    let mut known_options = KnownOptionsForTruck::new(truck_index);
+    let mut known_options = KnownRoutesForTruck::new();
     solve_for_truck_recursive(config, &truck, &mut known_options, &root_state);
     return known_options;
 }
@@ -652,7 +658,7 @@ fn solve_for_truck(config: &Config, truck_index: usize) -> KnownOptionsForTruck 
 fn solve_for_truck_recursive(
     config: &Config,
     truck: &Truck,
-    known_options: &mut KnownOptionsForTruck,
+    known_options: &mut KnownRoutesForTruck,
     current_state: &Rc<SearchState>,
 ) {
     if current_state.get_current_node() == 0 {
@@ -661,12 +667,9 @@ fn solve_for_truck_recursive(
         known_options.possibly_add(&current_state);
         return; //should never be left again
     }
-    //calculate number of currently loaded containers
-    let container_number = current_state.get_container_data();
-
     //try moving to the requests
     for request_node in 1..config.get_first_afs() {
-        if current_state.can_handle_request(config, truck, &container_number, request_node) {
+        if current_state.can_handle_request(config, truck, request_node) {
             let next_state =
                 SearchState::route_to_node(config, truck, &current_state, request_node);
             match next_state {
