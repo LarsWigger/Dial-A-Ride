@@ -25,21 +25,76 @@ mod solver_data {
     }
 
     pub struct Route {
-        route: Vec<usize>,
-        truck_index: usize,
+        ///the nodes taken by the route, saved as u8 to save memory, order backwards to avoid reverting every single route
+        reverse_path: Vec<u8>,
+        ///summary metric for comparing different routes
+        total_distance: u32,
     }
-    pub struct KnownOptions {
+
+    impl Route {
+        ///Creates a complete `Route` starting from `search_state`s path with index `path_index` and goes iterates over the previous_states until there is no `pvrevious_state`
+        pub fn new(search_state: &Rc<SearchState>, path_index: usize) -> Route {
+            let mut reverse_path = Vec::with_capacity(16);
+            let mut current_path = search_state.get_path(path_index);
+            let total_distance = current_path.total_distance;
+            let mut current_path_index;
+            let mut current_state = search_state;
+            loop {
+                current_path_index =
+                    Route::add_path_to_reverse_path(&mut reverse_path, current_path);
+                match &current_state.previous_state {
+                    Option::None => break,
+                    Option::Some(state) => {
+                        current_state = &state;
+                        current_path = current_state.get_path(current_path_index)
+                    }
+                }
+            }
+            return Route {
+                reverse_path,
+                total_distance,
+            };
+        }
+
+        ///Helper function that adds the previous
+        fn add_path_to_reverse_path(reverse_path: &mut Vec<u8>, path_option: &PathOption) -> usize {
+            for index in (0..path_option.path.len()).rev() {
+                reverse_path.push(path_option.path[index] as u8);
+            }
+            return path_option.previous_index;
+        }
+    }
+    pub struct KnownOptionsForTruck {
         map: HashMap<u64, Route>,
         truck_index: usize,
     }
 
-    impl KnownOptions {
-        pub fn new(truck_index: usize) -> KnownOptions {
+    impl KnownOptionsForTruck {
+        pub fn new(truck_index: usize) -> KnownOptionsForTruck {
+            //TODO: use faster hasher
             let map = HashMap::new();
-            return KnownOptions { map, truck_index };
+            return KnownOptionsForTruck { map, truck_index };
         }
 
-        pub fn possibly_add(&mut self, search_state: &Rc<SearchState>) {}
+        pub fn possibly_add(&mut self, search_state: &Rc<SearchState>) {
+            let requests_visited = search_state.get_all_requests_visited();
+            let (best_path_index, total_distance) = search_state.get_total_distance();
+            let previous_entry = self.map.get(&requests_visited);
+            let save_or_overwrite;
+            let new_route;
+            match previous_entry {
+                Option::None => {
+                    save_or_overwrite = true;
+                }
+                Option::Some(previous_route) => {
+                    save_or_overwrite = total_distance < previous_route.total_distance
+                }
+            };
+            if save_or_overwrite {
+                new_route = Route::new(search_state, best_path_index);
+                self.map.insert(requests_visited, new_route);
+            }
+        }
     }
 
     ///Represents a single PathOption. When navigating between two nodes, stops at fuel stations might be necessary or optional.
@@ -285,6 +340,10 @@ mod solver_data {
             self.requests_visisted = self.requests_visisted | request_binary;
         }
 
+        fn get_all_requests_visited(&self) -> u64 {
+            return self.requests_visisted;
+        }
+
         /// Calculates all the relevant routes from the current state to the target node and returns the next `SearchState`
         /// This may be `Option::None` if no route is found
         pub fn route_to_node(
@@ -396,12 +455,29 @@ mod solver_data {
             return self.current_node;
         }
 
+        ///Returns the index of the `PathOption` with the lowest `total_distance` as well as the `total_distance` itself
+        pub fn get_total_distance(&self) -> (usize, u32) {
+            let mut best_index = 0;
+            let mut lowest_distance = std::u32::MAX;
+            for (index, option) in self.path_options.iter().enumerate() {
+                if option.total_distance < lowest_distance {
+                    lowest_distance = option.total_distance;
+                    best_index = index;
+                }
+            }
+            return (best_index, lowest_distance);
+        }
+
         pub fn can_handle_request(
             config: &Config,
             current_state: &Rc<SearchState>,
             request_index: usize,
         ) -> bool {
             panic!("NOT IMPLEMENTED!");
+        }
+
+        pub fn get_path(&self, index: usize) -> &PathOption {
+            return &self.path_options[index];
         }
     }
 
@@ -414,10 +490,10 @@ use std::rc::Rc;
 pub fn solve(config: &Config) {}
 
 ///Calculates all the known options for truck at given index
-fn solve_for_truck(config: &Config, truck_index: usize) -> KnownOptions {
+fn solve_for_truck(config: &Config, truck_index: usize) -> KnownOptionsForTruck {
     let truck = config.get_truck(truck_index);
     let root_state = SearchState::start_state(truck.get_fuel());
-    let mut known_options = KnownOptions::new(truck_index);
+    let mut known_options = KnownOptionsForTruck::new(truck_index);
     solve_for_truck_recursive(config, &truck, &mut known_options, &root_state);
     return known_options;
 }
@@ -425,7 +501,7 @@ fn solve_for_truck(config: &Config, truck_index: usize) -> KnownOptions {
 fn solve_for_truck_recursive(
     config: &Config,
     truck: &Truck,
-    known_options: &mut KnownOptions,
+    known_options: &mut KnownOptionsForTruck,
     current_state: &Rc<SearchState>,
 ) {
     if current_state.get_current_node() == 0 {
