@@ -85,7 +85,7 @@ mod solver_data {
         }
     }
     pub struct KnownOptionsForTruck {
-        map: HashMap<u64, Route>,
+        map: HashMap<u64, Rc<Route>>,
         truck_index: usize,
     }
 
@@ -125,8 +125,91 @@ mod solver_data {
             };
             if save_or_overwrite {
                 new_route = Route::new(search_state, best_path_index);
-                self.map.insert(requests_visited, new_route);
+                self.map.insert(requests_visited, Rc::new(new_route));
             }
+        }
+    }
+
+    struct CombinationOption {
+        total_distance: u32,
+        routes: Vec<Rc<Route>>,
+    }
+
+    struct AllKnownOptions {
+        option_map: HashMap<u64, CombinationOption>,
+        num_vehicles: usize,
+        current_vehicle_index: usize,
+    }
+
+    impl AllKnownOptions {
+        pub fn new(num_vehicles: usize) -> AllKnownOptions {
+            let option_map = HashMap::new();
+            return AllKnownOptions {
+                option_map,
+                num_vehicles,
+                current_vehicle_index: 0,
+            };
+        }
+
+        pub fn addKnownOptionsForTruck(&mut self, truck_options: &KnownOptionsForTruck) {
+            if self.current_vehicle_index == 0 {
+                self.initalAddition(truck_options);
+            } else {
+                self.followingAddition(truck_options);
+            }
+            //increment so next addition uses this
+            self.current_vehicle_index += 1;
+        }
+
+        //just copy references to all the routes into `option_map` while adjusting/initializing the slightly different format
+        fn initalAddition(&mut self, truck_options: &KnownOptionsForTruck) {
+            for (key, value) in &truck_options.map {
+                let mut routes = Vec::with_capacity(self.num_vehicles);
+                routes.push(Rc::clone(value));
+                let option = CombinationOption {
+                    routes,
+                    total_distance: value.total_distance,
+                };
+                self.option_map.insert(*key, option);
+            }
+        }
+
+        fn followingAddition(&mut self, truck_options: &KnownOptionsForTruck) {
+            //performing this operation in place could lead to problems
+            //since this is created completely anew and not jsut copied, all values will be for the same number of vehicles
+            let mut new_map = HashMap::new();
+            for (own_key, own_value) in &self.option_map {
+                for (other_key, other_value) in &truck_options.map {
+                    //only if there is no clear conflict between these two routes
+                    //meaning, no request visited by both
+                    if own_key & other_key == 0 {
+                        let combined_key = own_key | other_key;
+                        let combined_distance =
+                            own_value.total_distance + other_value.total_distance;
+                        let alternative = self.option_map.get(&combined_key);
+                        let insert_into_map;
+                        match alternative {
+                            Option::Some(old_value) => {
+                                insert_into_map = old_value.total_distance > combined_distance
+                            }
+                            Option::None => insert_into_map = true,
+                        };
+                        if insert_into_map {
+                            let mut combination_routes = Vec::with_capacity(self.num_vehicles);
+                            for route in &own_value.routes {
+                                combination_routes.push(Rc::clone(route));
+                            }
+                            combination_routes.push(Rc::clone(other_value));
+                            let new_option = CombinationOption {
+                                routes: combination_routes,
+                                total_distance: combined_distance,
+                            };
+                            new_map.insert(combined_key, new_option);
+                        }
+                    }
+                }
+            }
+            self.option_map = new_map;
         }
     }
 
