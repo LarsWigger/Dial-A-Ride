@@ -129,24 +129,25 @@ mod solver_data {
     pub struct AllKnownOptions {
         ///maps `requests_visited` to the corresponding `CombinationOption` that is the best one known so far
         option_map: HashMap<u64, CombinationOption>,
-        ///the number of trucks, needed for knowing how many to elements a single vector needs
-        num_trucks: usize,
+        ///the number of trucks covered after the next union, needed for knowing how many to elements a single vector needs
+        num_trucks_next: usize,
     }
 
     //possible TODO: the vectors are initialized with the maximum size even though it is not needed.
     impl AllKnownOptions {
-        pub fn new(num_trucks: usize) -> AllKnownOptions {
+        pub fn new() -> AllKnownOptions {
             let option_map = HashMap::new();
             return AllKnownOptions {
                 option_map,
-                num_trucks,
+                num_trucks_next: 1,
             };
         }
 
-        //just copy references to all the routes into `option_map` while adjusting/initializing the slightly different format
-        pub fn initalAddition(&mut self, truck_options: &KnownRoutesForTruck) {
+        ///just copy references to all the routes into `option_map` while adjusting/initializing the slightly different format
+        pub fn initalMerge(&mut self, truck_options: &KnownRoutesForTruck) {
             for (key, value) in &truck_options.map {
-                let mut routes = Vec::with_capacity(self.num_trucks);
+                //it gets thrown away anyway, not need for more difficult allocation. Essentially just for compatibility
+                let mut routes = Vec::with_capacity(1);
                 routes.push(Rc::clone(value));
                 let option = CombinationOption {
                     routes,
@@ -154,9 +155,14 @@ mod solver_data {
                 };
                 self.option_map.insert(*key, option);
             }
+            self.num_trucks_next = 2;
         }
 
-        pub fn followingAddition(&mut self, truck_options: &KnownRoutesForTruck) {
+        ///Merge the new `truck_options` with the previously known options.
+        /// If two options are compatible (no request visited by both), they can be combined.
+        /// This combination is inserted if there is either no previous one or if it has a lower `total_distance`.
+        /// In order to avoid conflicts, the original map is replaced with a new one without being changed itself
+        pub fn additionalMerge(&mut self, truck_options: &KnownRoutesForTruck) {
             //performing this operation in place could lead to problems
             //since this is created completely anew and not jsut copied, all values will be for the same number of vehicles
             let mut new_map = HashMap::new();
@@ -177,7 +183,7 @@ mod solver_data {
                             Option::None => insert_into_map = true,
                         };
                         if insert_into_map {
-                            let mut combination_routes = Vec::with_capacity(self.num_trucks);
+                            let mut combination_routes = Vec::with_capacity(self.num_trucks_next);
                             for route in &own_value.routes {
                                 combination_routes.push(Rc::clone(route));
                             }
@@ -192,6 +198,7 @@ mod solver_data {
                 }
             }
             self.option_map = new_map;
+            self.num_trucks_next += 1;
         }
     }
 
@@ -625,11 +632,11 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 pub fn solve(config: Config) -> Solution {
-    let mut all_known_options = AllKnownOptions::new(config.get_num_trucks());
+    let mut all_known_options = AllKnownOptions::new();
     let current_truck = config.get_truck(0);
     println!("Calculating options for truck 0 ...");
     let mut options_for_truck = solve_for_truck(&config, 0);
-    all_known_options.initalAddition(&options_for_truck);
+    all_known_options.initalMerge(&options_for_truck);
     for truck_index in 1..config.get_num_trucks() {
         //avoid unnecessary recalculation of options_for_truck
         if config.get_truck(truck_index) != current_truck {
@@ -641,7 +648,7 @@ pub fn solve(config: Config) -> Solution {
                 truck_index
             );
         }
-        all_known_options.followingAddition(&options_for_truck);
+        all_known_options.additionalMerge(&options_for_truck);
     }
     return Solution {};
 }
