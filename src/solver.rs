@@ -77,6 +77,19 @@ mod solver_data {
         }
 
         pub fn possibly_add(&mut self, search_state: &Rc<SearchState>) {
+            //check whether any full containers have been picked up but not delivered
+            //this could not result in any proper result anyway, so we may as well prevent it here
+            match search_state.container_1 {
+                ContainerType::Full20(_) => return,
+                ContainerType::Full40(_) => return,
+                _ => (),
+            }
+            match search_state.container_2 {
+                ContainerType::Full20(_) => return,
+                ContainerType::Full40(_) => return,
+                _ => (),
+            }
+
             let requests_visited = search_state.get_all_requests_visited();
             let (best_path_index, total_distance) = search_state.get_total_distance();
             let previous_entry = self.map.get(&requests_visited);
@@ -228,7 +241,7 @@ mod solver_data {
             return Rc::new(search_state);
         }
 
-        ///Creates the next state after `current_state` using `path_options`
+        ///Creates the next state after `current_state` using `path_options`. Can't be called on `self` because the `Rc` to `self` is needed
         fn create_next_state_after_current_state(
             config: &Config,
             current_state: &Rc<SearchState>,
@@ -325,18 +338,22 @@ mod solver_data {
             }
         }
 
-        ///Returns whether the given `request` has been visited, makes the binary encoding more accessible
-        pub fn get_request_visited(&self, request: usize) -> bool {
+        ///Returns whether the given `request` has been visited, makes the binary encoding more accessible.
+        /// Indexing starts at 1 so it is consistent with the nodes (asserted)
+        pub fn get_request_visited(&self, request_node: usize) -> bool {
+            assert!(request_node != 0);
             //request binary is all 0 with 1 at the request index from the right
-            let request_binary: u64 = 1 << request;
+            let request_binary: u64 = 1 << request_node;
             let request_result = self.requests_visisted & request_binary;
             return request_result != 0;
         }
 
         ///Sets the given `request` as visited, makes the binary encoding more accessible
-        fn set_request_visited(&mut self, request: usize) {
+        ///Indexing starts at 1 so it is consistent with the nodes (asserted)
+        fn set_request_visited(&mut self, request_node: usize) {
+            assert!(request_node != 0);
             //request binary is all 0 with 1 at the request index from the right
-            let request_binary: u64 = 1 << request;
+            let request_binary: u64 = 1 << request_node;
             self.requests_visisted = self.requests_visisted | request_binary;
         }
 
@@ -344,7 +361,7 @@ mod solver_data {
             return self.requests_visisted;
         }
 
-        /// Calculates all the relevant routes from the current state to the target node and returns the next `SearchState`
+        /// Calculates all the relevant routes from `current_state` to the target node and returns the next `SearchState` alreay wrapped in `Rc`
         /// This may be `Option::None` if no route is found
         pub fn route_to_node(
             config: &Config,
@@ -468,8 +485,84 @@ mod solver_data {
             return (best_index, lowest_distance);
         }
 
-        pub fn can_handle_request(&self, config: &Config, request_index: usize) -> bool {
-            panic!("NOT IMPLEMENTED!");
+        fn get_num_containers_currently_loaded_by_size(&self) -> ContainerNumber {
+            let mut count_full_20 = 0;
+            let mut count_full_40 = 0;
+            let mut count_empty_20 = 0;
+            let mut count_empty_40 = 0;
+            match self.container_1 {
+                ContainerType::Empty20 => count_empty_20 += 1,
+                ContainerType::Full20(_) => count_full_20 += 1,
+                ContainerType::Empty40 => count_empty_40 += 1,
+                ContainerType::Full40(_) => count_full_40 += 1,
+                _ => (),
+            };
+            match self.container_2 {
+                ContainerType::Empty20 => count_empty_20 += 1,
+                ContainerType::Full20(_) => count_full_20 += 1,
+                ContainerType::Empty40 => count_empty_40 += 1,
+                ContainerType::Full40(_) => count_full_40 += 1,
+                _ => (),
+            };
+            return ContainerNumber {
+                empty_20: count_empty_20,
+                empty_40: count_empty_40,
+                num_20: count_full_20 + count_empty_20,
+                num_40: count_empty_40 + count_full_40,
+            };
+        }
+
+        pub fn can_handle_request(
+            &self,
+            config: &Config,
+            truck: &Truck,
+            request_node: usize,
+        ) -> bool {
+            //TODO: change container system to only allow one change per pickup, validating it in the data
+            //cannot visit the same request twice
+            if self.get_request_visited(request_node) {
+                return false;
+            }
+            let request = config.get_request_at_node(request_node);
+            //TODO: move this so it is calculated only once
+            let container_number = self.get_num_containers_currently_loaded_by_size();
+            //only to need to check whether something can be picked up
+            if request_node < config.get_first_full_dropoff() {
+                assert!(container_number.num_20 <= truck.get_num_20_foot_containers());
+                assert!(container_number.num_40 <= truck.get_num_40_foot_containers());
+                let newly_loaded_20 = request.empty_20 + request.full_20;
+                if newly_loaded_20 > 0 {
+                    if newly_loaded_20 + container_number.num_20
+                        > truck.get_num_20_foot_containers()
+                    {
+                        return false;
+                    }
+                }
+                let newly_loaded_40 = request.empty_40 + request.full_40;
+                if newly_loaded_40 > 0 {
+                    if newly_loaded_40 + container_number.num_40
+                        > truck.get_num_40_foot_containers()
+                    {
+                        return false;
+                    }
+                }
+                assert!(newly_loaded_20 + newly_loaded_40 > 0);
+            } else if request_node >= config.get_first_full_dropoff() {
+                if request_node >= config.get_first_full_dropoff() + config.get_full_pickup() {
+                    //just check whether the corresponging pickup request was visited
+                    self.get_request_visited(config.get_pick_node_for_full_dropoff(request_node));
+                } else {
+                    if -request.empty_20 > container_number.empty_20 {
+                        return false;
+                    }
+                    if -request.empty_40 > container_number.empty_40 {
+                        return false;
+                    }
+                }
+            } else {
+                panic!("THIS CASE SHOULD NEVER BE REACHED!");
+            }
+            return true;
         }
 
         pub fn get_path(&self, index: usize) -> &PathOption {
@@ -477,7 +570,12 @@ mod solver_data {
         }
     }
 
-    pub struct SearchStateWrapper {}
+    pub struct ContainerNumber {
+        empty_20: i32,
+        empty_40: i32,
+        num_20: i32,
+        num_40: i32,
+    }
 }
 use solver_data::*;
 use std::collections::HashMap;
@@ -507,10 +605,10 @@ fn solve_for_truck_recursive(
         return; //should never be left again
     }
     //try moving to the requests
-    for request_index in 1..config.get_first_afs() {
-        if current_state.can_handle_request(config, request_index) {
+    for request_node in 1..config.get_first_afs() {
+        if current_state.can_handle_request(config, truck, request_node) {
             let next_state =
-                SearchState::route_to_node(config, truck, &current_state, request_index);
+                SearchState::route_to_node(config, truck, &current_state, request_node);
             match next_state {
                 Option::None => (),
                 Option::Some(state) => {

@@ -14,12 +14,12 @@ impl Truck {
         };
     }
 
-    pub fn get_num_20_foot_containers(&self) -> u32 {
-        return self.num_20_foot_containers;
+    pub fn get_num_20_foot_containers(&self) -> i32 {
+        return self.num_20_foot_containers as i32;
     }
 
-    pub fn get_num_40_foot_containers(&self) -> u32 {
-        return self.num_40_foot_containers;
+    pub fn get_num_40_foot_containers(&self) -> i32 {
+        return self.num_40_foot_containers as i32;
     }
 
     pub fn get_fuel(&self) -> u32 {
