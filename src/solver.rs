@@ -1,4 +1,5 @@
 use crate::data::Config;
+use crate::data::Solution;
 use crate::data::Truck;
 
 mod solver_data {
@@ -135,10 +136,9 @@ mod solver_data {
         routes: Vec<Rc<Route>>,
     }
 
-    struct AllKnownOptions {
+    pub struct AllKnownOptions {
         option_map: HashMap<u64, CombinationOption>,
         num_vehicles: usize,
-        current_vehicle_index: usize,
     }
 
     impl AllKnownOptions {
@@ -147,22 +147,11 @@ mod solver_data {
             return AllKnownOptions {
                 option_map,
                 num_vehicles,
-                current_vehicle_index: 0,
             };
         }
 
-        pub fn addKnownOptionsForTruck(&mut self, truck_options: &KnownOptionsForTruck) {
-            if self.current_vehicle_index == 0 {
-                self.initalAddition(truck_options);
-            } else {
-                self.followingAddition(truck_options);
-            }
-            //increment so next addition uses this
-            self.current_vehicle_index += 1;
-        }
-
         //just copy references to all the routes into `option_map` while adjusting/initializing the slightly different format
-        fn initalAddition(&mut self, truck_options: &KnownOptionsForTruck) {
+        pub fn initalAddition(&mut self, truck_options: &KnownOptionsForTruck) {
             for (key, value) in &truck_options.map {
                 let mut routes = Vec::with_capacity(self.num_vehicles);
                 routes.push(Rc::clone(value));
@@ -174,7 +163,7 @@ mod solver_data {
             }
         }
 
-        fn followingAddition(&mut self, truck_options: &KnownOptionsForTruck) {
+        pub fn followingAddition(&mut self, truck_options: &KnownOptionsForTruck) {
             //performing this operation in place could lead to problems
             //since this is created completely anew and not jsut copied, all values will be for the same number of vehicles
             let mut new_map = HashMap::new();
@@ -688,7 +677,27 @@ use solver_data::*;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-pub fn solve(config: &Config) {}
+pub fn solve(config: Config) -> Solution {
+    let mut all_known_options = AllKnownOptions::new(config.get_num_trucks());
+    let current_truck = config.get_truck(0);
+    println!("Calculating options for truck 0 ...");
+    let mut options_for_truck = solve_for_truck(&config, 0);
+    all_known_options.initalAddition(&options_for_truck);
+    for truck_index in 1..config.get_num_trucks() {
+        //avoid unnecessary recalculation of options_for_truck
+        if config.get_truck(truck_index) != current_truck {
+            println!("Calculating options for truck {} ...", truck_index);
+            options_for_truck = solve_for_truck(&config, truck_index);
+        } else {
+            println!(
+                "Truck {} is the same as the one before, no calculation necessary.",
+                truck_index
+            );
+        }
+        all_known_options.followingAddition(&options_for_truck);
+    }
+    return Solution {};
+}
 
 ///Calculates all the known options for truck at given index
 fn solve_for_truck(config: &Config, truck_index: usize) -> KnownOptionsForTruck {

@@ -1,3 +1,4 @@
+#[derive(PartialEq, Eq)]
 pub struct Truck {
     num_20_foot_containers: u32,
     num_40_foot_containers: u32,
@@ -160,3 +161,5 @@ impl Config {
         return self.full_pickup + self.empty_delivery + 1;
     }
 }
+
+pub struct Solution {}
