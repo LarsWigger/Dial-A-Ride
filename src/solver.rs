@@ -8,22 +8,6 @@ mod solver_data {
     use std::collections::HashMap;
     use std::rc::Rc;
 
-    ///Represents the type of container currently loaded. The full containers are additionally identified by the pickup request for them.
-    /// For the empty containers, this makes no difference at all.
-    #[derive(Eq, PartialEq, Copy, Clone)]
-    enum ContainerType {
-        ///a full 20 foot container for the specific full container pickup request
-        Full20(usize),
-        ///any empty 20 foot container, which one makes no difference
-        Empty20,
-        ///a full 40 foot container for the specific full container pickup request
-        Full40(usize),
-        ///an empty 40 foot container, which one makes no difference
-        Empty40,
-        ///no container at all
-        NoContainer,
-    }
-
     pub struct Route {
         ///the nodes taken by the route, saved as u8 to save memory, order backwards to avoid reverting every single route
         reverse_path: Vec<u8>,
@@ -99,15 +83,10 @@ mod solver_data {
         pub fn possibly_add(&mut self, search_state: &Rc<SearchState>) {
             //check whether any full containers have been picked up but not delivered
             //this could not result in any proper result anyway, so we may as well prevent it here
-            match search_state.container_1 {
-                ContainerType::Full20(_) => return,
-                ContainerType::Full40(_) => return,
-                _ => (),
-            }
-            match search_state.container_2 {
-                ContainerType::Full20(_) => return,
-                ContainerType::Full40(_) => return,
-                _ => (),
+            if (search_state.container_data.num_20 - search_state.container_data.empty_20 > 0)
+                || (search_state.container_data.num_40 - search_state.container_data.empty_40 > 0)
+            {
+                return;
             }
 
             let requests_visited = search_state.get_all_requests_visited();
@@ -303,10 +282,6 @@ mod solver_data {
         current_node: usize,
         ///all the paths leading from the previous `SearchState` to `current_node`, sorted
         path_options: Vec<PathOption>,
-        ///the currently loaded first container
-        container_1: ContainerType,
-        ///the currently loaded second container
-        container_2: ContainerType,
         container_data: ContainerData,
         ///the requests that have been visited so far, binary encoding for efficiency
         requests_visisted: u64,
@@ -330,8 +305,6 @@ mod solver_data {
             let search_state = SearchState {
                 current_node: 0,
                 path_options,
-                container_1: ContainerType::NoContainer,
-                container_2: ContainerType::NoContainer,
                 container_data: ContainerData::new(),
                 requests_visisted: 0,
                 previous_state: Option::None,
@@ -351,8 +324,6 @@ mod solver_data {
             let mut new_state = SearchState {
                 current_node,
                 path_options,
-                container_1: current_state.container_1,
-                container_2: current_state.container_2,
                 container_data: ContainerData::new(),
                 requests_visisted: current_state.requests_visisted,
                 previous_state: Option::Some(new_state_reference),
