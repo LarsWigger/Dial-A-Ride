@@ -32,13 +32,32 @@ mod solver_data {
     }
 
     impl Route {
-        ///Creates a complete `Route` starting from `search_state`s path with index `path_index` and goes iterates over the previous_states until there is no `pvrevious_state`
+        ///Creates a complete `Route` starting from `search_state`s path with index `path_index` and goes iterates over the previous_states until there is no `previous_state`
         pub fn new(search_state: &Rc<SearchState>, path_index: usize) -> Route {
-            let mut reverse_path = Vec::with_capacity(16);
-            let mut current_path = search_state.get_path(path_index);
-            let total_distance = current_path.total_distance;
-            let mut current_path_index;
+            //setup for iteration
             let mut current_state = search_state;
+            let mut current_path_index;
+            let mut current_path = search_state.get_path(path_index);
+            //save total_distance for later
+            let total_distance = current_path.total_distance;
+            //calculate size of vector first to avoid either time for reallocation or waste of memory - there will be A LOT of routes at once!
+            let mut vec_size = 0;
+            loop {
+                vec_size += current_path.path.len();
+                current_path_index = current_path.previous_index;
+                match &current_state.previous_state {
+                    Option::None => break,
+                    Option::Some(state) => {
+                        current_state = &state;
+                        current_path = current_state.get_path(current_path_index)
+                    }
+                }
+            }
+            let mut reverse_path = Vec::with_capacity(vec_size);
+            //reset variables that were changed and will be read before being overwritten
+            current_state = search_state;
+            current_path = current_state.get_path(path_index);
+            //fill up the reverse_path
             loop {
                 current_path_index =
                     Route::add_path_to_reverse_path(&mut reverse_path, current_path);
@@ -50,6 +69,7 @@ mod solver_data {
                     }
                 }
             }
+            assert!(vec_size == reverse_path.len());
             return Route {
                 reverse_path,
                 total_distance,
