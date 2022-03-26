@@ -39,9 +39,7 @@ mod solver_data {
             return KnownOptions { map, truck_index };
         }
 
-        pub fn get_map(self) -> HashMap<u64, Route> {
-            return self.map;
-        }
+        pub fn possibly_add(&mut self, search_state: &Rc<SearchState>) {}
     }
 
     ///Represents a single PathOption. When navigating between two nodes, stops at fuel stations might be necessary or optional.
@@ -178,18 +176,19 @@ mod solver_data {
         ///Creates the next state after `current_state` using `path_options`
         fn create_next_state_after_current_state(
             config: &Config,
-            current_state: Rc<SearchState>,
+            current_state: &Rc<SearchState>,
             path_options: Vec<PathOption>,
         ) -> Rc<SearchState> {
             //this function should only be called when at least one path exists
             let current_node = path_options[0].get_current_node();
+            let new_state_reference = Rc::clone(&current_state);
             let mut new_state = SearchState {
                 current_node,
                 path_options,
                 container_1: current_state.container_1,
                 container_2: current_state.container_2,
                 requests_visisted: current_state.requests_visisted,
-                previous_state: Option::Some(current_state),
+                previous_state: Option::Some(new_state_reference),
             };
             //do containers need to be changed/is the new node a request?
             if current_node < config.get_first_afs() {
@@ -291,7 +290,7 @@ mod solver_data {
         pub fn route_to_node(
             config: &Config,
             truck: &Truck,
-            current_state: Rc<SearchState>,
+            current_state: &Rc<SearchState>,
             node: usize,
         ) -> Option<Rc<SearchState>> {
             let mut path_options = Vec::with_capacity(4);
@@ -399,7 +398,7 @@ mod solver_data {
 
         pub fn can_handle_request(
             config: &Config,
-            current_state: Rc<SearchState>,
+            current_state: &Rc<SearchState>,
             request_index: usize,
         ) -> bool {
             panic!("NOT IMPLEMENTED!");
@@ -415,31 +414,37 @@ use std::rc::Rc;
 pub fn solve(config: &Config) {}
 
 ///Calculates all the known options for truck at given index
-fn solve_for_truck(config: &Config, truck_index: usize) -> HashMap<u64, Route> {
+fn solve_for_truck(config: &Config, truck_index: usize) -> KnownOptions {
     let truck = config.get_truck(truck_index);
     let root_state = SearchState::start_state(truck.get_fuel());
     let mut known_options = KnownOptions::new(truck_index);
-    solve_for_truck_recursive(config, &truck, &mut known_options, root_state);
-    return known_options.get_map();
+    solve_for_truck_recursive(config, &truck, &mut known_options, &root_state);
+    return known_options;
 }
 
 fn solve_for_truck_recursive(
     config: &Config,
     truck: &Truck,
     known_options: &mut KnownOptions,
-    current_state: Rc<SearchState>,
+    current_state: &Rc<SearchState>,
 ) {
     if current_state.get_current_node() == 0 {
-        //blabla
+        known_options.possibly_add(&current_state);
     } else if current_state.get_current_node() == config.get_dummy_depot() {
-        //blabla
+        known_options.possibly_add(&current_state);
         return; //should never be left again
     }
     //try moving to the requests
     for request_index in 1..config.get_first_afs() {
-        if SearchState::can_handle_request(config, Rc::clone(&current_state), request_index) {
+        if SearchState::can_handle_request(config, &current_state, request_index) {
             let next_state =
-                SearchState::route_to_node(config, truck, Rc::clone(&current_state), request_index);
+                SearchState::route_to_node(config, truck, &current_state, request_index);
+            match next_state {
+                Option::None => (),
+                Option::Some(state) => {
+                    solve_for_truck_recursive(config, truck, known_options, &state)
+                }
+            };
         };
     }
 }
@@ -453,6 +458,6 @@ mod routing_tests {
         let config = parser::parse(2, 2, 2, 2, 1, 2);
         let truck = config.get_truck(0);
         let base_state = SearchState::start_state(truck.get_fuel());
-        let next_state = SearchState::route_to_node(&config, truck, base_state, 1);
+        let next_state = SearchState::route_to_node(&config, truck, &base_state, 1);
     }
 }
