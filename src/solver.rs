@@ -5,8 +5,8 @@ mod solver_data {
     use crate::data::Config;
     use crate::data::ContainerRequest;
     use crate::data::Truck;
-    use std::cell::RefCell;
     use std::collections::HashMap;
+    use std::rc::Rc;
 
     ///Represents the type of container currently loaded. The full containers are additionally identified by the pickup request for them.
     /// For the empty containers, this makes no difference at all.
@@ -28,23 +28,16 @@ mod solver_data {
         route: Vec<usize>,
         truck_index: usize,
     }
-    pub struct KnownOptions<'a> {
+    pub struct KnownOptions {
         map: HashMap<u64, Route>,
-        root_state: &'a SearchState,
         truck_index: usize,
     }
 
-    impl<'a> KnownOptions<'a> {
-        pub fn new(root_state: &'a SearchState, truck_index: usize) -> KnownOptions {
+    impl KnownOptions {
+        pub fn new(truck_index: usize) -> KnownOptions {
             let map = HashMap::new();
-            return KnownOptions {
-                map,
-                root_state,
-                truck_index,
-            };
+            return KnownOptions { map, truck_index };
         }
-
-        pub fn process_current_route(&self) {}
 
         pub fn get_map(self) -> HashMap<u64, Route> {
             return self.map;
@@ -155,12 +148,12 @@ mod solver_data {
         ///the requests that have been visited so far, binary encoding for efficiency
         requests_visisted: u64,
         ///the next state after this one, may or may not exist and may be overwritten later
-        next_state: RefCell<Option<Box<SearchState>>>,
+        previous_state: Option<Rc<SearchState>>,
     }
 
     impl SearchState {
         ///Creates the initial `SearchState` at the depot with the given `fuel_capacity`, no actions taken so far
-        pub fn start_state(fuel_level: u32) -> SearchState {
+        pub fn start_state(fuel_level: u32) -> Rc<SearchState> {
             let mut path = Vec::with_capacity(1);
             path.push(0);
             let mut path_options = Vec::with_capacity(1);
@@ -177,29 +170,32 @@ mod solver_data {
                 container_1: ContainerType::NoContainer,
                 container_2: ContainerType::NoContainer,
                 requests_visisted: 0,
-                next_state: RefCell::new(Option::None),
+                previous_state: Option::None,
             };
-            return search_state;
+            return Rc::new(search_state);
         }
 
-        ///Creates and appends `next_state`. `path_options` was calculated beforehand and is also sorted by this function before its insertion
-        fn create_and_append_next_state(&self, config: &Config, path_options: Vec<PathOption>) {
+        ///Creates the next state after `current_state` using `path_options`
+        fn create_next_state_after_current_state(
+            config: &Config,
+            current_state: Rc<SearchState>,
+            path_options: Vec<PathOption>,
+        ) -> Rc<SearchState> {
             //this function should only be called when at least one path exists
             let current_node = path_options[0].get_current_node();
-            //TODO: sort path_options
             let mut new_state = SearchState {
                 current_node,
                 path_options,
-                container_1: self.container_1,
-                container_2: self.container_2,
-                requests_visisted: self.requests_visisted,
-                next_state: RefCell::new(Option::None),
+                container_1: current_state.container_1,
+                container_2: current_state.container_2,
+                requests_visisted: current_state.requests_visisted,
+                previous_state: Option::Some(current_state),
             };
             //do containers need to be changed/is the new node a request?
             if current_node < config.get_first_afs() {
                 new_state.handle_request_containers(config);
             }
-            self.next_state.replace(Option::Some(Box::new(new_state)));
+            return Rc::new(new_state);
         }
 
         ///Adjusts the containers at the request node the state is currently at and marks this request as visited afterwards.
@@ -290,17 +286,22 @@ mod solver_data {
             self.requests_visisted = self.requests_visisted | request_binary;
         }
 
-        /// Calculates all the relevant routes from the current state to the target node and saves the resulting `SearchState`
-        /// to `next_state`. May not find a path, so the `next_state` may be `NoNext`
-        pub fn route_to_node(&self, config: &Config, truck: &Truck, node: usize) {
+        /// Calculates all the relevant routes from the current state to the target node and returns the next `SearchState`
+        /// This may be `Option::None` if no route is found
+        pub fn route_to_node(
+            config: &Config,
+            truck: &Truck,
+            current_state: Rc<SearchState>,
+            node: usize,
+        ) -> Option<Rc<SearchState>> {
             let mut path_options = Vec::with_capacity(4);
             //first step, use previous ones to go directly to node
-            for (index, option) in self.path_options.iter().enumerate() {
+            for (index, option) in current_state.path_options.iter().enumerate() {
                 let new_option = option.next_path_option(config, truck, index, node);
                 SearchState::possibly_add_to_path_options(&mut path_options, new_option);
             }
             //second step, go to AFS in order to try reaching the node from there (possibly even chaining multiple AFS)
-            for (index, option) in self.path_options.iter().enumerate() {
+            for (index, option) in current_state.path_options.iter().enumerate() {
                 for afs in config.get_first_afs()..config.get_first_afs() + config.get_afs() {
                     let new_option = option.next_path_option(config, truck, index, afs);
                     SearchState::possibly_add_to_path_options(&mut path_options, new_option);
@@ -311,7 +312,7 @@ mod solver_data {
             let mut improvement_found = true;
             while improvement_found {
                 improvement_found = false;
-                for (index, option) in self.path_options.iter().enumerate() {
+                for (index, option) in current_state.path_options.iter().enumerate() {
                     //save for repeated usage:
                     let current_node = option.get_current_node();
                     //to new node
@@ -351,9 +352,13 @@ mod solver_data {
             path_options.retain(|x| x.get_current_node() == node);
             if path_options.len() == 0 {
                 //no path found, overwrite just in case
-                self.next_state.replace(Option::None);
+                return Option::None;
             } else {
-                self.create_and_append_next_state(config, path_options);
+                return Option::Some(SearchState::create_next_state_after_current_state(
+                    config,
+                    current_state,
+                    path_options,
+                ));
             }
         }
 
@@ -391,19 +396,30 @@ mod solver_data {
         pub fn get_current_node(&self) -> usize {
             return self.current_node;
         }
+
+        pub fn can_handle_request(
+            config: &Config,
+            current_state: Rc<SearchState>,
+            request_index: usize,
+        ) -> bool {
+            panic!("NOT IMPLEMENTED!");
+        }
     }
+
+    pub struct SearchStateWrapper {}
 }
 use solver_data::*;
 use std::collections::HashMap;
+use std::rc::Rc;
 
 pub fn solve(config: &Config) {}
 
 ///Calculates all the known options for truck at given index
 fn solve_for_truck(config: &Config, truck_index: usize) -> HashMap<u64, Route> {
     let truck = config.get_truck(truck_index);
-    let root_state: SearchState = SearchState::start_state(truck.get_fuel());
-    let mut known_options = KnownOptions::new(&root_state, truck_index);
-    solve_for_truck_recursive(config, &truck, &mut known_options, &root_state);
+    let root_state = SearchState::start_state(truck.get_fuel());
+    let mut known_options = KnownOptions::new(truck_index);
+    solve_for_truck_recursive(config, &truck, &mut known_options, root_state);
     return known_options.get_map();
 }
 
@@ -411,14 +427,20 @@ fn solve_for_truck_recursive(
     config: &Config,
     truck: &Truck,
     known_options: &mut KnownOptions,
-    search_state: &SearchState,
+    current_state: Rc<SearchState>,
 ) {
-    if search_state.get_current_node() == 0 {
-        known_options.process_current_route();
+    if current_state.get_current_node() == 0 {
+        //blabla
+    } else if current_state.get_current_node() == config.get_dummy_depot() {
+        //blabla
+        return; //should never be left again
     }
     //try moving to the requests
     for request_index in 1..config.get_first_afs() {
-        search_state.route_to_node(config, truck, request_index);
+        if SearchState::can_handle_request(config, Rc::clone(&current_state), request_index) {
+            let next_state =
+                SearchState::route_to_node(config, truck, Rc::clone(&current_state), request_index);
+        };
     }
 }
 
@@ -429,7 +451,8 @@ mod routing_tests {
     #[test]
     fn route_0_to_1() {
         let config = parser::parse(2, 2, 2, 2, 1, 2);
-        let mut base_state = SearchState::start_state(config.get_truck(0).get_fuel());
-        base_state.route_to_node(&config, config.get_truck(0), 1);
+        let truck = config.get_truck(0);
+        let base_state = SearchState::start_state(truck.get_fuel());
+        let next_state = SearchState::route_to_node(&config, truck, base_state, 1);
     }
 }
