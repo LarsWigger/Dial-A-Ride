@@ -485,7 +485,7 @@ mod solver_data {
             return (best_index, lowest_distance);
         }
 
-        fn get_num_containers_currently_loaded_by_size(&self) -> ContainerNumber {
+        pub fn get_num_containers_currently_loaded(&self) -> ContainerNumber {
             let mut count_full_20 = 0;
             let mut count_full_40 = 0;
             let mut count_empty_20 = 0;
@@ -516,6 +516,7 @@ mod solver_data {
             &self,
             config: &Config,
             truck: &Truck,
+            container_number: &ContainerNumber,
             request_node: usize,
         ) -> bool {
             //TODO: change container system to only allow one change per pickup, validating it in the data
@@ -524,8 +525,6 @@ mod solver_data {
                 return false;
             }
             let request = config.get_request_at_node(request_node);
-            //TODO: move this so it is calculated only once
-            let container_number = self.get_num_containers_currently_loaded_by_size();
             //only to need to check whether something can be picked up
             if request_node < config.get_first_full_dropoff() {
                 assert!(container_number.num_20 <= truck.get_num_20_foot_containers());
@@ -604,9 +603,12 @@ fn solve_for_truck_recursive(
         known_options.possibly_add(&current_state);
         return; //should never be left again
     }
+    //calculate number of currently loaded containers
+    let container_number = current_state.get_num_containers_currently_loaded();
+
     //try moving to the requests
     for request_node in 1..config.get_first_afs() {
-        if current_state.can_handle_request(config, truck, request_node) {
+        if current_state.can_handle_request(config, truck, &container_number, request_node) {
             let next_state =
                 SearchState::route_to_node(config, truck, &current_state, request_node);
             match next_state {
@@ -617,6 +619,19 @@ fn solve_for_truck_recursive(
             };
         };
     }
+    //try changing containers at depot
+    //optimization potential: do this at the beginning, if the depot cannot be reached AND the dummy depot can't be reached directly, this state is a dead end
+    //if necessary, navigate to the depot
+    let depot_state;
+    if current_state.get_current_node() == 0 {
+        depot_state = current_state;
+    } else {
+        let possible_depot_state = SearchState::route_to_node(config, truck, &current_state, 0);
+        match possible_depot_state {
+            Option::None => return,
+            Option::Some(state) => depot_state = &state,
+        };
+    };
 }
 
 #[cfg(test)]
