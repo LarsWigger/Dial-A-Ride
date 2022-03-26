@@ -144,7 +144,7 @@ mod solver_data {
         }
 
         ///just copy references to all the routes into `option_map` while adjusting/initializing the slightly different format
-        pub fn initalMerge(&mut self, truck_options: &KnownRoutesForTruck) {
+        pub fn inital_merge(&mut self, truck_options: &KnownRoutesForTruck) {
             for (key, value) in &truck_options.map {
                 //it gets thrown away anyway, not need for more difficult allocation. Essentially just for compatibility
                 let mut routes = Vec::with_capacity(1);
@@ -162,7 +162,7 @@ mod solver_data {
         /// If two options are compatible (no request visited by both), they can be combined.
         /// This combination is inserted if there is either no previous one or if it has a lower `total_distance`.
         /// In order to avoid conflicts, the original map is replaced with a new one without being changed itself
-        pub fn additionalMerge(&mut self, truck_options: &KnownRoutesForTruck) {
+        pub fn additional_merge(&mut self, truck_options: &KnownRoutesForTruck) {
             //performing this operation in place could lead to problems
             //since this is created completely anew and not jsut copied, all values will be for the same number of vehicles
             let mut new_map = HashMap::new();
@@ -599,7 +599,7 @@ mod solver_data {
             return true;
         }
 
-        pub fn get_path(&self, index: usize) -> &PathOption {
+        fn get_path(&self, index: usize) -> &PathOption {
             return &self.path_options[index];
         }
     }
@@ -628,7 +628,6 @@ mod solver_data {
     }
 }
 use solver_data::*;
-use std::collections::HashMap;
 use std::rc::Rc;
 
 pub fn solve(config: Config) -> Solution {
@@ -636,7 +635,7 @@ pub fn solve(config: Config) -> Solution {
     let current_truck = config.get_truck(0);
     println!("Calculating options for truck 0 ...");
     let mut options_for_truck = solve_for_truck(&config, 0);
-    all_known_options.initalMerge(&options_for_truck);
+    all_known_options.inital_merge(&options_for_truck);
     for truck_index in 1..config.get_num_trucks() {
         //avoid unnecessary recalculation of options_for_truck
         if config.get_truck(truck_index) != current_truck {
@@ -648,7 +647,7 @@ pub fn solve(config: Config) -> Solution {
                 truck_index
             );
         }
-        all_known_options.additionalMerge(&options_for_truck);
+        all_known_options.additional_merge(&options_for_truck);
     }
     return Solution {};
 }
