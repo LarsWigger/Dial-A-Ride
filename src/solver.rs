@@ -557,7 +557,7 @@ mod solver_data {
                 initial_state = current_state;
                 depot_service = false;
             }
-            //first step, use paths from current_state to go directly to node or fuel stations or depot
+            //first step, use paths from initial_state to go directly to node or fuel stations or depot
             for (option_index, option) in initial_state.path_options.iter().enumerate() {
                 //target node
                 let mut new_option =
@@ -623,7 +623,7 @@ mod solver_data {
                             }
                         }
                         //at depot
-                        if option.get_current_node() != 0 {
+                        if current_node != 0 {
                             //not already at depot, navigate to depot normally first, then refuel, tmp_option discarded
                             let tmp_option = match option.next_path_option(
                                 config,
