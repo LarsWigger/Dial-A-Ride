@@ -110,9 +110,7 @@ mod solver_data {
         ///maps the `requests_visited` bits to the best corresponding route known (so far). Route is behind smart pointer to copying later on
         map: HashMap<u64, Rc<Route>>,
         ///not needed for calculation, counts how many valid routes were inserted
-        valid_insertions: u64,
-        ///not needed for calculation, counts how many entries were overwritten
-        overwrites: u64,
+        valid_insertions: usize
     }
 
     impl KnownRoutesForTruck {
@@ -122,8 +120,7 @@ mod solver_data {
             let map = HashMap::new();
             return KnownRoutesForTruck {
                 map,
-                valid_insertions: 0,
-                overwrites: 0,
+                valid_insertions: 0
             };
         }
 
@@ -157,19 +154,16 @@ mod solver_data {
             if save || overwrite {
                 let new_route = Route::new(search_state, best_path_index, total_distance);
                 self.map.insert(requests_visited, Rc::new(new_route));
-                if overwrite {
-                    self.overwrites += 1;
-                }
             }
         }
 
         pub fn summarize_to_terminal(&self) {
             println!(
-                "There were {} valid insertions and {} routes were overwritten.",
-                self.valid_insertions, self.overwrites
+                "There were {} valid insertions out of which {} remain.",
+                self.valid_insertions, self.map.len()
             );
             let percentage_discarded =
-                (self.overwrites as f64) / (self.valid_insertions as f64) * 100.;
+                ((self.valid_insertions - self.map.len()) as f64) / (self.valid_insertions as f64) * 100.;
             println!(
                 "So there are {} routes remaining and {}% were discarded",
                 self.map.len(),
@@ -828,7 +822,7 @@ mod solver_data {
             {
                 return false;
             }
-            return false;
+            return true;
         }
 
         ///Creates the next state after `current_state` where nothing has been changed except hat `change_20` empty 20-foot containers (can be negative) have been loaded.
@@ -891,9 +885,9 @@ mod solver_data {
 
     pub struct EmptyContainersStillNeeded {
         ///Number of empty 20-foot containers that still need to be delivered
-        empty_20_delivery: i32,
+        pub empty_20_delivery: i32,
         ///Number of empty 40-foot containers that still need to be delivered
-        empty_40_delivery: i32,
+        pub empty_40_delivery: i32,
     }
 }
 use solver_data::*;
@@ -904,6 +898,7 @@ pub fn solve(config: Config) -> Solution {
     let current_truck = config.get_truck(0);
     let mut options_for_truck = solve_for_truck(&config, 0);
     options_for_truck.summarize_to_terminal();
+    return Solution {};
     all_known_options.inital_merge(&options_for_truck);
     println!("");
     for truck_index in 1..config.get_num_trucks() {
@@ -968,10 +963,16 @@ fn solve_for_truck_recursive(
         //loading at the depot is always done in a separate state after navigating to the depot. This prevents repeated identical routing and makes parsing the route easier
         //only do this when the depot has not been loaded in the current_state already, otherwise infinite branching would result
         if !current_state.was_depot_loaded() {
+            print!("Loading depot...");
             //calculate only once
             let containers_needed = current_state.get_containers_still_needed(config);
+            println!(
+                "Containers needed: {} empty_20, {} empty_40",
+                containers_needed.empty_20_delivery, containers_needed.empty_40_delivery
+            );
             //some combinations are always nonsene, so these are not included in the predefined array
             for (change_20, change_40) in POSSIBLE_DEPOT_LOADS {
+                print!("Try loading {}|{}:", change_20, change_40);
                 if current_state.can_handle_depot_load(
                     truck,
                     &containers_needed,
@@ -981,7 +982,10 @@ fn solve_for_truck_recursive(
                     //create new state where the loading has been applied. Due to the above condition, no loading will happen immadiately afterwards
                     let next_state =
                         SearchState::load_at_depot(config, &current_state, *change_20, *change_40);
+                    println!("Loaded");
                     solve_for_truck_recursive(config, truck, known_options, &next_state)
+                } else {
+                    println!("Not loaded");
                 }
             }
         }

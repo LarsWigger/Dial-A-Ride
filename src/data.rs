@@ -1,13 +1,13 @@
 #[derive(PartialEq, Eq, PartialOrd, Ord)]
 pub struct Truck {
-    num_20_foot_containers: u32,
-    num_40_foot_containers: u32,
+    num_20_foot_containers: i32,
+    num_40_foot_containers: i32,
     //in 0.01l to avoid floating point operations, works only with the given consumption rate of 0.45l/km and refuel rate of 10l/min
     fuel: u32,
 }
 
 impl Truck {
-    pub fn new(num_20_foot_containers: u32, num_40_foot_containers: u32, fuel: u32) -> Truck {
+    pub fn new(num_20_foot_containers: i32, num_40_foot_containers: i32, fuel: u32) -> Truck {
         return Truck {
             num_20_foot_containers,
             num_40_foot_containers,
@@ -89,7 +89,7 @@ impl Config {
         requests: Vec<ContainerRequest>,
     ) -> Config {
         let matrix_dimension = (2 * full_pickup) + empty_pickup + empty_delivery + afs + 2;
-        trucks.sort();
+        //trucks.sort();
         return Config {
             full_pickup,
             empty_pickup,
