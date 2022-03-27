@@ -1,4 +1,4 @@
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
 pub struct Truck {
     num_20_foot_containers: u32,
     num_40_foot_containers: u32,
@@ -79,7 +79,7 @@ impl Config {
         empty_pickup: usize,
         empty_delivery: usize,
         afs: usize,
-        trucks: Vec<Truck>,
+        mut trucks: Vec<Truck>,
         distance_matrix: Vec<u32>,
         time_matrix: Vec<u32>,
         depot_service_time: u32,
@@ -89,6 +89,7 @@ impl Config {
         requests: Vec<ContainerRequest>,
     ) -> Config {
         let matrix_dimension = (2 * full_pickup) + empty_pickup + empty_delivery + afs + 2;
+        trucks.sort();
         return Config {
             full_pickup,
             empty_pickup,

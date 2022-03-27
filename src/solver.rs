@@ -902,14 +902,14 @@ use std::rc::Rc;
 pub fn solve(config: Config) -> Solution {
     let mut all_known_options = AllKnownOptions::new();
     let current_truck = config.get_truck(0);
-    println!("Calculating options for truck 0 ...");
     let mut options_for_truck = solve_for_truck(&config, 0);
     options_for_truck.summarize_to_terminal();
     all_known_options.inital_merge(&options_for_truck);
+    println!("");
     for truck_index in 1..config.get_num_trucks() {
+        let current_truck = config.get_truck(truck_index);
         //avoid unnecessary recalculation of options_for_truck
-        if config.get_truck(truck_index) != current_truck {
-            println!("Calculating options for truck {} ...", truck_index);
+        if config.get_truck(truck_index - 1) != current_truck {
             options_for_truck = solve_for_truck(&config, truck_index);
             options_for_truck.summarize_to_terminal();
         } else {
@@ -919,12 +919,14 @@ pub fn solve(config: Config) -> Solution {
             );
         }
         all_known_options.additional_merge(&options_for_truck);
+        println!(""); //newline for better readability
     }
     return Solution {};
 }
 
 ///Calculates all the known options for truck at given index
 fn solve_for_truck(config: &Config, truck_index: usize) -> KnownRoutesForTruck {
+    println!("Calculating options for truck {} ...", truck_index);
     let truck = config.get_truck(truck_index);
     let root_state = SearchState::start_state(truck.get_fuel());
     let mut known_options = KnownRoutesForTruck::new();
