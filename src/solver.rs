@@ -658,6 +658,7 @@ mod solver_data {
             return self.path_options.len() == 0;
         }
 
+        ///Calculates and returns the number empty 20- and 40-foot containers that still need to be delivered in this state
         pub fn get_containers_still_needed(&self, config: &Config) -> EmptyContainersStillNeeded {
             let mut empty_20_delivery = 0;
             let mut empty_40_delivery = 0;
@@ -672,8 +673,8 @@ mod solver_data {
             };
         }
 
-        ///Checks whether that many empty 20- and 40-foot containers could be (un-)loaded at the depot
-        /// Also tries to avoid unecessary branching - pickung up additional containers is pointless if none need to be delivered.
+        ///Checks whether that many empty 20- and 40-foot containers could be (un-)loaded at the depot.
+        /// Also tries to avoid unecessary branching - picking up additional containers is pointless if none need to be delivered.
         pub fn can_handle_depot_load(
             &self,
             truck: &Truck,
@@ -697,14 +698,15 @@ mod solver_data {
             let new_empty_20 = self.container_data.empty_20 + change_20;
             let new_empty_40 = self.container_data.empty_40 + change_40;
             if (new_empty_20 > containers_needed.empty_20_delivery)
-                || (new_40 > containers_needed.empty_40_delivery)
+                || (new_empty_40 > containers_needed.empty_40_delivery)
             {
                 return false;
             }
             return false;
         }
 
-        ///
+        ///Creates the next state after `current_state` where nothing has been changed except hat `change_20` empty 20-foot containers (can be negative) have been loaded.
+        /// Same for `change_40`. `path_options` is empty because a) there is nothing for it anyway and b) this indicates that something was loaded in this state
         pub fn load_at_depot(
             config: &Config,
             current_state: &Rc<SearchState>,
@@ -826,16 +828,19 @@ fn solve_for_truck_recursive(
     known_options: &mut KnownRoutesForTruck,
     current_state: &Rc<SearchState>,
 ) {
-    //routes end at the dummy depot. I also allow ending at the depot as this makes some things more convenient
-    if current_state.get_current_node() == config.get_dummy_depot() {
-        known_options.possibly_add(&current_state);
-        return;
-    }
-    //try navigating to depot first because if it cannot be reached the rest is pointless anyway
+    //dummy depot is never routed to internally, there is no reason to differentiate between it and the original depot
+    assert!(current_state.get_current_node() != config.get_dummy_depot());
     if current_state.get_current_node() == 0 {
+        known_options.possibly_add(&current_state);
+    }
+    //depot, handled first because if it cannot be reached the rest is pointless anyway
+    if current_state.get_current_node() == 0 {
+        //loading at the depot is always done in a separate state after navigating to the depot. This prevents repeated identical routing and makes parsing the route easier
         //only do this when the depot has not been loaded in the current_state already, otherwise infinite branching would result
         if !current_state.get_depot_loaded() {
+            //calculate only once
             let containers_needed = current_state.get_containers_still_needed(config);
+            //some combinations are always nonsene, so these are not included in the predefined array
             for (change_20, change_40) in POSSIBLE_DEPOT_LOADS {
                 if current_state.can_handle_depot_load(
                     truck,
@@ -843,12 +848,16 @@ fn solve_for_truck_recursive(
                     *change_20,
                     *change_40,
                 ) {
+                    //create new state where the loading has been applied. Due to the above condition, no loading will happen immadiately afterwards
                     let next_state =
                         SearchState::load_at_depot(config, &current_state, *change_20, *change_40);
+                    solve_for_truck_recursive(config, truck, known_options, &next_state)
                 }
             }
         }
+        //if already at the depot and loaded, has to move somewhere else and the only option for this are requests
     } else {
+        //not already at depot, try routing to it. If it cannot be reached, the route can't be finished so this search may already be interrupted
         let possible_depot_state = SearchState::route_to_node(config, truck, &current_state, 0);
         match possible_depot_state {
             Option::None => return,
