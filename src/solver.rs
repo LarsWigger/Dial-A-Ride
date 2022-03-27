@@ -355,7 +355,7 @@ mod solver_data {
         ///If currently at the depot, this function returns the next `PathOption` where the truck has been completely refilled
         pub fn refuel_at_depot(&self, truck: &Truck, previous_index: usize) -> Option<PathOption> {
             //only call refuel_at_depot when already at a depot
-            assert!(self.get_current_node() == 0);
+            assert_eq!(self.get_current_node(), 0);
             //create new path
             let mut path: Vec<usize> = Vec::with_capacity(self.path.len() + 1);
             for node in &self.path {
@@ -570,7 +570,7 @@ mod solver_data {
                     SearchState::possibly_add_to_path_options(&mut path_options, new_option);
                 }
                 //depot for refueling only
-                if current_state.current_node != 0 {
+                if option.get_current_node() != 0 {
                     //not already at depot, navigate to depot normally first. no reason to save this temporary one
                     let depot_option =
                         match option.next_path_option(config, truck, option_index, 0, false) {
@@ -623,7 +623,7 @@ mod solver_data {
                             }
                         }
                         //at depot
-                        if current_state.current_node != 0 {
+                        if option.get_current_node() != 0 {
                             //not already at depot, navigate to depot normally first, then refuel, tmp_option discarded
                             let tmp_option = match option.next_path_option(
                                 config,
