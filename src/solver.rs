@@ -110,7 +110,7 @@ mod solver_data {
         ///maps the `requests_visited` bits to the best corresponding route known (so far). Route is behind smart pointer to copying later on
         map: HashMap<u64, Rc<Route>>,
         ///not needed for calculation, counts how many valid routes were inserted
-        valid_insertions: usize
+        valid_insertions: usize,
     }
 
     impl KnownRoutesForTruck {
@@ -120,7 +120,7 @@ mod solver_data {
             let map = HashMap::new();
             return KnownRoutesForTruck {
                 map,
-                valid_insertions: 0
+                valid_insertions: 0,
             };
         }
 
@@ -141,17 +141,11 @@ mod solver_data {
             let (best_path_index, total_distance) =
                 search_state.get_path_index_and_total_distance();
             let previous_entry = self.map.get(&requests_visited);
-            let mut save = false;
-            let mut overwrite = false;
-            match previous_entry {
-                Option::None => {
-                    save = true;
-                }
-                Option::Some(previous_route) => {
-                    overwrite = total_distance < previous_route.total_distance
-                }
+            let save_or_overwrite = match previous_entry {
+                Option::None => true,
+                Option::Some(previous_route) => (total_distance < previous_route.total_distance),
             };
-            if save || overwrite {
+            if save_or_overwrite {
                 let new_route = Route::new(search_state, best_path_index, total_distance);
                 self.map.insert(requests_visited, Rc::new(new_route));
             }
@@ -160,10 +154,12 @@ mod solver_data {
         pub fn summarize_to_terminal(&self) {
             println!(
                 "There were {} valid insertions out of which {} remain.",
-                self.valid_insertions, self.map.len()
+                self.valid_insertions,
+                self.map.len()
             );
-            let percentage_discarded =
-                ((self.valid_insertions - self.map.len()) as f64) / (self.valid_insertions as f64) * 100.;
+            let percentage_discarded = ((self.valid_insertions - self.map.len()) as f64)
+                / (self.valid_insertions as f64)
+                * 100.;
             println!(
                 "So there are {} routes remaining and {}% were discarded",
                 self.map.len(),
@@ -751,7 +747,7 @@ mod solver_data {
                     }
                 }
                 assert!(newly_loaded_20 + newly_loaded_40 > 0);
-            } else{
+            } else {
                 //dropoff
                 if request_node < config.get_first_empty_dropoff() {
                     //full container dropoff
