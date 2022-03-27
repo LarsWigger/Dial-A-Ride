@@ -8,7 +8,6 @@ mod solver_data {
     use std::collections::HashMap;
     use std::rc::Rc;
 
-    const ROUTE_DEPOT_REFUEL: u8 = std::u8::MAX;
     const ROUTE_DEPOT_LOAD_20: u8 = std::u8::MAX - 1;
     const ROUTE_DEPOT_DELOAD_20: u8 = std::u8::MAX - 2;
     const ROUTE_DEPOT_LOAD_40: u8 = std::u8::MAX - 3;
@@ -16,8 +15,9 @@ mod solver_data {
 
     ///Represents the route a single truck could take.
     pub struct Route {
-        ///the nodes taken by the route, saved as u8 to save memory, order backwards to avoid reverting every single route
-        reverse_path: Vec<u8>,
+        ///the nodes taken by the route, saved as u8 to save memory, special nodes specified above for (de-)loading at depot,
+        /// fueling at depot is indicated by two 0 in succession
+        path: Vec<u8>,
         ///summary metric for comparing different routes
         total_distance: u32,
     }
@@ -25,54 +25,80 @@ mod solver_data {
     impl Route {
         ///Creates a complete `Route` starting from `search_state`s path with index `path_index` and iterates over the previous_states until there is no `previous_state`
         pub fn new(search_state: &Rc<SearchState>, path_index: usize) -> Route {
-            //setup for iteration
-            let mut current_state = search_state;
-            let mut current_path_index;
-            let mut current_path = search_state.get_path(path_index);
-            //save total_distance for later
-            let total_distance = current_path.total_distance;
-            //calculate size of vector first to avoid either time for reallocation or waste of memory - there will be A LOT of routes at once!
-            let mut vec_size = 0;
-            loop {
-                vec_size += current_path.path.len();
-                current_path_index = current_path.previous_index;
-                match &current_state.previous_state {
-                    Option::None => break,
-                    Option::Some(state) => {
-                        current_state = &state;
-                        current_path = current_state.get_path(current_path_index)
-                    }
-                }
-            }
-            let mut reverse_path = Vec::with_capacity(vec_size);
-            //reset variables that were changed and will be read before being overwritten
-            current_state = search_state;
-            current_path = current_state.get_path(path_index);
-            //fill up the reverse_path
-            loop {
-                current_path_index =
-                    Route::add_path_to_reverse_path(&mut reverse_path, current_path);
-                match &current_state.previous_state {
-                    Option::None => break,
-                    Option::Some(state) => {
-                        current_state = &state;
-                        current_path = current_state.get_path(current_path_index)
-                    }
-                }
-            }
-            assert!(vec_size == reverse_path.len());
+            let (path_index, total_distance) = search_state.get_path_index_and_total_distance();
+            let path = Route::new_path_recursive(search_state, path_index, 0);
             return Route {
-                reverse_path,
+                path,
                 total_distance,
             };
         }
 
-        ///Helper function that adds `path_option` to `reverse_path` and returns the index of the next `PathOption` to be processed
-        fn add_path_to_reverse_path(reverse_path: &mut Vec<u8>, path_option: &PathOption) -> usize {
-            for index in (0..path_option.path.len()).rev() {
-                reverse_path.push(path_option.path[index] as u8);
+        ///Recursive helper function that tracks back to the root state. On the way to the root state, it calculates the numer of elements needed in the final
+        /// vector. The count from previous (upper) calls is passed as `current_size`.
+        fn new_path_recursive(
+            current_state: &Rc<SearchState>,
+            current_state_path_index: usize,
+            current_size: usize,
+        ) -> Vec<u8> {
+            match &current_state.previous_state {
+                Option::Some(previous_state) => {
+                    let mut path;
+                    if previous_state.was_depot_loaded() {
+                        //calculate how many containers were exchanged
+                        let diff_empty_20 = current_state.container_data.empty_20
+                            - previous_state.container_data.empty_20;
+                        let diff_empty_40 = current_state.container_data.empty_40
+                            - previous_state.container_data.empty_40;
+                        let size_at_this_step =
+                            (diff_empty_20.abs() + diff_empty_40.abs()) as usize;
+                        //recursion
+                        path = Route::new_path_recursive(
+                            previous_state,
+                            current_state_path_index,
+                            current_size + size_at_this_step,
+                        );
+                        //loading
+                        let len_before = path.len(); //sanity check
+                        if diff_empty_20 < 0 {
+                            for _ in 0..-diff_empty_20 {
+                                path.push(ROUTE_DEPOT_DELOAD_20);
+                            }
+                        } else if diff_empty_20 > 0 {
+                            for _ in 0..diff_empty_20 {
+                                path.push(ROUTE_DEPOT_LOAD_20);
+                            }
+                        }
+                        if diff_empty_40 < 0 {
+                            for _ in 0..-diff_empty_40 {
+                                path.push(ROUTE_DEPOT_DELOAD_40);
+                            }
+                        } else if diff_empty_40 > 0 {
+                            for _ in 0..diff_empty_40 {
+                                path.push(ROUTE_DEPOT_LOAD_40);
+                            }
+                        }
+                        assert_eq!(path.len(), len_before + size_at_this_step);
+                    } else {
+                        let current_path = &current_state.path_options[current_state_path_index];
+                        let size_at_this_step = current_path.path.len();
+                        path = Route::new_path_recursive(
+                            previous_state,
+                            current_path.previous_index,
+                            current_size + size_at_this_step,
+                        );
+                        for node in &current_path.path {
+                            path.push(*node as u8);
+                        }
+                    }
+                    return path;
+                }
+                Option::None => {
+                    //the original state will always have only 1 path option: 0
+                    let mut path = Vec::with_capacity(current_size + 1);
+                    path.push(0);
+                    return path;
+                }
             }
-            return path_option.previous_index;
         }
     }
     ///Represents all the known routes for a single truck
@@ -103,7 +129,8 @@ mod solver_data {
             }
 
             let requests_visited = search_state.requests_visisted;
-            let (best_path_index, total_distance) = search_state.get_total_distance();
+            let (best_path_index, total_distance) =
+                search_state.get_path_index_and_total_distance();
             let previous_entry = self.map.get(&requests_visited);
             let save_or_overwrite;
             let new_route;
@@ -583,7 +610,7 @@ mod solver_data {
         }
 
         ///Returns the index of the `PathOption` with the lowest `total_distance` as well as the `total_distance` itself
-        pub fn get_total_distance(&self) -> (usize, u32) {
+        pub fn get_path_index_and_total_distance(&self) -> (usize, u32) {
             let mut best_index = 0;
             let mut lowest_distance = std::u32::MAX;
             for (index, option) in self.path_options.iter().enumerate() {
@@ -658,7 +685,7 @@ mod solver_data {
         }
 
         ///Returns whether containers were loaded/unloaded at the depot in this state
-        pub fn get_depot_loaded(&self) -> bool {
+        pub fn was_depot_loaded(&self) -> bool {
             return self.path_options.len() == 0;
         }
 
@@ -841,7 +868,7 @@ fn solve_for_truck_recursive(
     if current_state.get_current_node() == 0 {
         //loading at the depot is always done in a separate state after navigating to the depot. This prevents repeated identical routing and makes parsing the route easier
         //only do this when the depot has not been loaded in the current_state already, otherwise infinite branching would result
-        if !current_state.get_depot_loaded() {
+        if !current_state.was_depot_loaded() {
             //calculate only once
             let containers_needed = current_state.get_containers_still_needed(config);
             //some combinations are always nonsene, so these are not included in the predefined array
