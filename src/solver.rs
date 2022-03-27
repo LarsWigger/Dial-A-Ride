@@ -238,6 +238,8 @@ mod solver_data {
             depot_refuel: bool,
         ) -> Option<PathOption> {
             let from = self.path[self.path.len() - 1];
+            //only call depot_refuel when already at a depot
+            assert!(!depot_refuel || from == 0);
             let total_distance = config.get_distance_between(from, to);
             let fuel_needed = config.fuel_needed_for_route(from, to);
             if fuel_needed > self.fuel_level {
@@ -286,20 +288,21 @@ mod solver_data {
             return Some(new_option);
         }
 
-        ///If `other` is at the same node and none of its `fuel_level`, `total_distance` or `total_time` is better than that of `self`, `true` is returned, otherwise `false`
+        ///Returns `true` if there is no scenario where `other` would be preferred over self `self`, `false` otherwise
         pub fn completely_superior_to(&self, other: &PathOption) -> bool {
-            return (self.fuel_level >= other.fuel_level)
+            return self.partly_superior_to(other)
+                //check whether not worse in either regard
                 && (self.total_distance <= other.total_distance)
-                && (self.total_time <= other.total_time)
-                && (self.path[self.path.len() - 1] == other.path[other.path.len() - 1]);
+                && (self.total_time <= other.total_time);
         }
 
-        ///If `other` is at the same node and one of its `fuel_level`, `total_distance` or `total_time` is better than that of `self`, true is returned, otherwise false
+        ///Returns `true` if `self` might be preferable over `other` in a certain scenario. This does not indicate complete superiority, which is a harder criterium including this one
         pub fn partly_superior_to(&self, other: &PathOption) -> bool {
-            return (self.path[self.path.len() - 1] == other.path[other.path.len() - 1])
-                && ((self.fuel_level < other.fuel_level)
-                    || (self.total_distance > other.total_distance)
-                    || (self.total_time > other.total_time));
+            let comparable = (self.path[self.path.len() - 1] == other.path[other.path.len() - 1])
+                && (self.fuel_level == other.fuel_level);
+            let at_least_one_better = (self.total_distance < other.total_distance)
+                || (self.total_time < other.total_time);
+            return comparable && at_least_one_better;
         }
 
         ///Returns the node this `PathOption` is currently at
@@ -318,7 +321,7 @@ mod solver_data {
         ///current node in the distance/time matrix
         current_node: usize,
         ///all the paths leading from the previous `SearchState` to `current_node`, sorted
-        path_options: Vec<PathOption>,
+        path_options: Vec<Rc<PathOption>>,
         ///represents the containers the truck is carrying in this state
         container_data: ContainerData,
         ///the requests that have been visited so far, binary encoding for efficiency
@@ -333,13 +336,13 @@ mod solver_data {
             let mut path = Vec::with_capacity(1);
             path.push(0);
             let mut path_options = Vec::with_capacity(1);
-            path_options.push(PathOption {
+            path_options.push(Rc::new(PathOption {
                 fuel_level,
                 total_distance: 0,
                 total_time: 0,
                 path,
                 previous_index: 0,
-            });
+            }));
             let search_state = SearchState {
                 current_node: 0,
                 path_options,
@@ -354,7 +357,7 @@ mod solver_data {
         fn create_next_state_after_current_state(
             config: &Config,
             current_state: &Rc<SearchState>,
-            path_options: Vec<PathOption>,
+            path_options: Vec<Rc<PathOption>>,
         ) -> Rc<SearchState> {
             //this function should only be called when at least one path exists
             let current_node = path_options[0].get_current_node();
@@ -367,7 +370,7 @@ mod solver_data {
                 previous_state: Option::Some(new_state_reference),
             };
             //do containers need to be changed/is the new node a request?
-            if current_node < config.get_first_afs() {
+            if 0 < current_node && current_node < config.get_first_afs() {
                 new_state.handle_request_containers(config);
             }
             return Rc::new(new_state);
@@ -447,39 +450,58 @@ mod solver_data {
             node: usize,
         ) -> Option<Rc<SearchState>> {
             assert!(current_state.current_node != node);
-            //it is not predictable in advance how big this will get, so I just initialize it with 8 (probably bad)
-            let mut path_options = Vec::with_capacity(8);
+            //it is not predictable in advance how big this will get, so I just initialize it with 20 (probably bad)
+            //TODO: calculate a more realistic size, there is a maximum number of elements that can be calculated
+            let mut path_options = Vec::with_capacity(20);
             //first step, use previous ones to go directly to node or fuel stations or depot
             for (index, option) in current_state.path_options.iter().enumerate() {
                 //target node
-                let new_option = option.next_path_option(config, truck, index, node, false);
+                let mut new_option = option.next_path_option(config, truck, index, node, false);
                 SearchState::possibly_add_to_path_options(&mut path_options, new_option);
                 //fuel stations
                 for afs in config.get_first_afs()..config.get_first_afs() + config.get_afs() {
-                    let new_option = option.next_path_option(config, truck, index, afs, false);
+                    new_option = option.next_path_option(config, truck, index, afs, false);
                     SearchState::possibly_add_to_path_options(&mut path_options, new_option);
                 }
-                //depot (only for refueling, pass true to the parameter)
-                let new_option = option.next_path_option(config, truck, index, node, true);
-                SearchState::possibly_add_to_path_options(&mut path_options, new_option);
+                //depot (only for refueling, needs to appear at least twice in a row in the path)
+                if current_state.current_node != 0 {
+                    //navigate to depot normally first. Two zeros following each other represent a refuel, needed for clarity
+                    //if we would go straight to the depot and refuel there would be only one
+                    let tmp_option =
+                        match option.next_path_option(config, truck, index, node, false) {
+                            Option::None => continue, //cannot be reached, nothing to to in this iteration
+                            Option::Some(opt) => opt,
+                        };
+                    //now the one with refueling
+                    new_option = tmp_option.next_path_option(config, truck, index, node, true);
+                    SearchState::possibly_add_to_path_options(&mut path_options, new_option);
+                } else {
+                    //already at depot
+                    new_option = option.next_path_option(config, truck, index, node, true);
+                    SearchState::possibly_add_to_path_options(&mut path_options, new_option);
+                }
             }
             //second step, try using previously found path_options one to find a better path to somewhere (not only the depot)
             let mut improvement_found = true;
+            let mut iteration_clone = Vec::with_capacity(20);
             while improvement_found {
                 improvement_found = false;
-                for (index, option) in current_state.path_options.iter().enumerate() {
+                //compiler complains and this is probably cheaper than copying all the PathOptions
+                iteration_clone.retain(|_| false);
+                for index in 0..path_options.len() {
+                    let option = Rc::clone(&path_options[index]);
+                    iteration_clone.push(option);
+                }
+                for (index, option) in iteration_clone.iter().enumerate() {
                     //save for repeated usage:
                     let current_node = option.get_current_node();
                     //to target node
                     if option.get_current_node() != node {
                         let new_option = option.next_path_option(config, truck, index, node, false);
-                        let made_change = SearchState::possibly_add_to_path_options(
+                        improvement_found |= SearchState::possibly_add_to_path_options(
                             &mut path_options,
                             new_option,
                         );
-                        if made_change {
-                            improvement_found = true;
-                        }
                     }
                     //refueling, makes no sense starting from the target node
                     if current_node != node {
@@ -491,30 +513,24 @@ mod solver_data {
                             if current_node != afs {
                                 let new_option =
                                     option.next_path_option(config, truck, index, node, false);
-                                let made_change = SearchState::possibly_add_to_path_options(
+                                improvement_found |= SearchState::possibly_add_to_path_options(
                                     &mut path_options,
                                     new_option,
                                 );
-                                if made_change {
-                                    improvement_found = true;
-                                }
                             }
                         }
                         //to depot
                         //this may be called when already at the depot. In that case, depot will appear twice in the path, but the result will be refueled
                         let new_option = option.next_path_option(config, truck, index, node, true);
-                        let made_change = SearchState::possibly_add_to_path_options(
+                        improvement_found |= SearchState::possibly_add_to_path_options(
                             &mut path_options,
                             new_option,
                         );
-                        if made_change {
-                            improvement_found = true;
-                        }
                     }
                 }
             }
-            //third step, remove anything that does not end at the depot
-            path_options.retain(|x| x.get_current_node() == node);
+            //third step, remove anything that does not end at the target node
+            path_options.retain(|option| option.get_current_node() == node);
             if path_options.len() == 0 {
                 //no path found
                 return Option::None;
@@ -529,9 +545,9 @@ mod solver_data {
 
         ///Removes the elements of `path_options` that are completely inferior to `new_option`
         /// and adds `new_option` if it was partially superior to at least one of the previous elements
-        /// Returns `true` if a change was made
+        /// Returns `true` if a change was made, `false` otherwise
         fn possibly_add_to_path_options(
-            path_options: &mut Vec<PathOption>,
+            path_options: &mut Vec<Rc<PathOption>>,
             new_option: Option<PathOption>,
         ) -> bool {
             let unpacked_option = match new_option {
@@ -541,16 +557,16 @@ mod solver_data {
             //to detect whether something was removed
             let original_length = path_options.len();
             //remove the entries that are completely inferior to the new one (CAN THIS EVEN HAPPEN?)
-            path_options.retain(|x| !unpacked_option.completely_superior_to(&x));
+            path_options.retain(|option| !unpacked_option.completely_superior_to(&option));
             if original_length != path_options.len() {
-                //something was removed
-                path_options.push(unpacked_option);
+                //something was removed => completely superior to something => insert, done
+                path_options.push(Rc::new(unpacked_option));
                 return true;
             } else {
                 //check whether unpacked_option is at least partially superior to one of the existing ones
                 for i in 0..path_options.len() {
                     if unpacked_option.partly_superior_to(&path_options[i]) {
-                        path_options.push(unpacked_option);
+                        path_options.push(Rc::new(unpacked_option));
                         return true;
                     }
                 }
