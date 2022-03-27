@@ -8,6 +8,12 @@ mod solver_data {
     use std::collections::HashMap;
     use std::rc::Rc;
 
+    const ROUTE_DEPOT_REFUEL: u8 = std::u8::MAX;
+    const ROUTE_DEPOT_LOAD_20: u8 = std::u8::MAX - 1;
+    const ROUTE_DEPOT_DELOAD_20: u8 = std::u8::MAX - 2;
+    const ROUTE_DEPOT_LOAD_40: u8 = std::u8::MAX - 3;
+    const ROUTE_DEPOT_DELOAD_40: u8 = std::u8::MAX - 4;
+
     ///Represents the route a single truck could take.
     pub struct Route {
         ///the nodes taken by the route, saved as u8 to save memory, order backwards to avoid reverting every single route
@@ -259,9 +265,6 @@ mod solver_data {
                         total_time = config.get_earliest_visiting_time(to)
                     }
                     total_time += config.get_service_time(to);
-                } else {
-                    //depot handling times
-                    //TODO!
                 }
             }
             //create new path
@@ -592,7 +595,8 @@ mod solver_data {
             return (best_index, lowest_distance);
         }
 
-        ///Returns `true` if the state can handle the request next (without visiting a different request first)
+        ///Returns `true` if the state can handle the request next (without visiting a different request first).
+        /// Time is not taken into account, in that case the routing would just return None
         pub fn can_handle_request(
             &self,
             config: &Config,
@@ -601,7 +605,6 @@ mod solver_data {
         ) -> bool {
             assert!(self.container_data.num_20 <= truck.get_num_20_foot_containers());
             assert!(self.container_data.num_40 <= truck.get_num_40_foot_containers());
-            //TODO: change container system to only allow one change per pickup, validating it in the data
             //cannot visit the same request twice
             if self.get_request_visited(request_node) {
                 return false;
@@ -654,6 +657,7 @@ mod solver_data {
             return &self.path_options[index];
         }
 
+        ///Returns whether containers were loaded/unloaded at the depot in this state
         pub fn get_depot_loaded(&self) -> bool {
             return self.path_options.len() == 0;
         }
