@@ -125,18 +125,16 @@ mod solver_data {
         pub fn possibly_add(&mut self, search_state: &Rc<SearchState>) {
             //check whether any full containers have been picked up but not delivered
             //this could not result in any proper result anyway, so we may as well prevent it here
-            if (search_state.container_data.num_20 - search_state.container_data.empty_20 > 0)
-                || (search_state.container_data.num_40 - search_state.container_data.empty_40 > 0)
+            if (search_state.container_data.full_request_1_source != 0)
+                && (search_state.container_data.full_request_2_source != 0)
             {
                 return;
             }
-
             let requests_visited = search_state.requests_visisted;
             let (best_path_index, total_distance) =
                 search_state.get_path_index_and_total_distance();
             let previous_entry = self.map.get(&requests_visited);
             let save_or_overwrite;
-            let new_route;
             match previous_entry {
                 Option::None => {
                     save_or_overwrite = true;
@@ -146,7 +144,7 @@ mod solver_data {
                 }
             };
             if save_or_overwrite {
-                new_route = Route::new(search_state, best_path_index, total_distance);
+                let new_route = Route::new(search_state, best_path_index, total_distance);
                 self.map.insert(requests_visited, Rc::new(new_route));
             }
         }
@@ -157,7 +155,7 @@ mod solver_data {
     struct CombinationOption {
         ///summary metric, sum of the distance of the individual routes
         total_distance: u32,
-        ///the different routes, each route is for the truck at the same index
+        ///the different routes, each route is for the truck at the same index, wrapped in reference counted pointer to avoid a lot of copying
         routes: Vec<Rc<Route>>,
     }
 
@@ -179,10 +177,10 @@ mod solver_data {
             };
         }
 
-        ///just copy references to all the routes into `option_map` while adjusting/initializing the slightly different format
+        ///Just copy references to all the routes into `option_map` while adjusting/initializing the slightly different format
         pub fn inital_merge(&mut self, truck_options: &KnownRoutesForTruck) {
             for (key, value) in &truck_options.map {
-                //it gets thrown away anyway, not need for more difficult allocation. Essentially just for compatibility
+                //gets thrown away anyway
                 let mut routes = Vec::with_capacity(1);
                 routes.push(Rc::clone(value));
                 let option = CombinationOption {
@@ -200,8 +198,7 @@ mod solver_data {
         /// In order to avoid conflicts, the original map is replaced with a new one without being changed itself
         pub fn additional_merge(&mut self, truck_options: &KnownRoutesForTruck) {
             //performing this operation in place could lead to problems
-            //since this is created completely anew and not jsut copied, all values will be for the same number of vehicles
-            let mut new_map = HashMap::new();
+            let mut new_map: HashMap<u64, CombinationOption> = HashMap::new();
             for (own_key, own_value) in &self.option_map {
                 for (other_key, other_value) in &truck_options.map {
                     //only if there is no clear conflict between these two routes
@@ -210,13 +207,11 @@ mod solver_data {
                         let combined_key = own_key | other_key;
                         let combined_distance =
                             own_value.total_distance + other_value.total_distance;
-                        let alternative = self.option_map.get(&combined_key);
-                        let insert_into_map;
-                        match alternative {
-                            Option::Some(old_value) => {
-                                insert_into_map = old_value.total_distance > combined_distance
-                            }
-                            Option::None => insert_into_map = true,
+                        //has something better already been saved to new_map?
+                        let alternative = new_map.get(&combined_key);
+                        let insert_into_map = match alternative {
+                            Option::Some(old_value) => old_value.total_distance > combined_distance,
+                            Option::None => true,
                         };
                         if insert_into_map {
                             let mut combination_routes = Vec::with_capacity(self.num_trucks_next);
