@@ -24,8 +24,11 @@ mod solver_data {
 
     impl Route {
         ///Creates a complete `Route` starting from `search_state`s path with index `path_index` and iterates over the previous_states until there is no `previous_state`
-        pub fn new(search_state: &Rc<SearchState>, path_index: usize) -> Route {
-            let (path_index, total_distance) = search_state.get_path_index_and_total_distance();
+        pub fn new(
+            search_state: &Rc<SearchState>,
+            path_index: usize,
+            total_distance: u32,
+        ) -> Route {
             let path = Route::new_path_recursive(search_state, path_index, 0);
             return Route {
                 path,
@@ -143,7 +146,7 @@ mod solver_data {
                 }
             };
             if save_or_overwrite {
-                new_route = Route::new(search_state, best_path_index);
+                new_route = Route::new(search_state, best_path_index, total_distance);
                 self.map.insert(requests_visited, Rc::new(new_route));
             }
         }
