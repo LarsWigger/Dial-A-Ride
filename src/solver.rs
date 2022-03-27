@@ -162,6 +162,20 @@ mod solver_data {
                 }
             }
         }
+
+        pub fn summarize_to_terminal(&self) {
+            println!(
+                "There were {} valid insertions and {} routes were overwritten.",
+                self.valid_insertions, self.overwrites
+            );
+            let percentage_discarded =
+                (self.overwrites as f64) / (self.valid_insertions as f64) * 100.;
+            println!(
+                "So there are {} routes remaining and {}% were discarded",
+                self.map.len(),
+                percentage_discarded
+            );
+        }
     }
 
     ///Combines up to `config.num_trucks` routes, each corresponding to the truck at the respective index,
@@ -890,12 +904,14 @@ pub fn solve(config: Config) -> Solution {
     let current_truck = config.get_truck(0);
     println!("Calculating options for truck 0 ...");
     let mut options_for_truck = solve_for_truck(&config, 0);
+    options_for_truck.summarize_to_terminal();
     all_known_options.inital_merge(&options_for_truck);
     for truck_index in 1..config.get_num_trucks() {
         //avoid unnecessary recalculation of options_for_truck
         if config.get_truck(truck_index) != current_truck {
             println!("Calculating options for truck {} ...", truck_index);
             options_for_truck = solve_for_truck(&config, truck_index);
+            options_for_truck.summarize_to_terminal();
         } else {
             println!(
                 "Truck {} is the same as the one before, no calculation necessary.",
