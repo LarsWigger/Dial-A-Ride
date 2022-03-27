@@ -751,7 +751,7 @@ mod solver_data {
                     }
                 }
                 assert!(newly_loaded_20 + newly_loaded_40 > 0);
-            } else if request_node >= config.get_first_full_dropoff() {
+            } else{
                 //dropoff
                 if request_node < config.get_first_empty_dropoff() {
                     //full container dropoff
@@ -767,8 +767,6 @@ mod solver_data {
                         return false;
                     }
                 }
-            } else {
-                panic!("THIS CASE SHOULD NEVER BE REACHED!");
             }
             return true;
         }
