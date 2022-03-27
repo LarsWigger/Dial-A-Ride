@@ -17,7 +17,7 @@ mod solver_data {
     ///Represents the route a single truck could take.
     pub struct Route {
         ///the nodes taken by the route, saved as u8 to save memory, special nodes specified above for (de-)loading at depot,
-        /// fueling at depot is indicated by two 0 in succession
+        /// fueling at depot is indicated by ROUTE_DEPOT_REFUEL in succession which is already indicated that way in the actual `PathOption`s
         path: Vec<u8>,
         ///summary metric for comparing different routes
         total_distance: u32,
@@ -105,10 +105,14 @@ mod solver_data {
             }
         }
     }
-    ///Represents all the known routes for a single truck
+    ///Represents all the known routes for a single truck. Also has simple counters to evaluate how much complexity this saves with the given data.
     pub struct KnownRoutesForTruck {
         ///maps the `requests_visited` bits to the best corresponding route known (so far). Route is behind smart pointer to copying later on
         map: HashMap<u64, Rc<Route>>,
+        ///not needed for calculation, counts how many valid routes were inserted
+        valid_insertions: u64,
+        ///not needed for calculation, counts how many entries were overwritten
+        overwrites: u64,
     }
 
     impl KnownRoutesForTruck {
@@ -116,7 +120,11 @@ mod solver_data {
         pub fn new() -> KnownRoutesForTruck {
             //TODO: use faster hasher
             let map = HashMap::new();
-            return KnownRoutesForTruck { map };
+            return KnownRoutesForTruck {
+                map,
+                valid_insertions: 0,
+                overwrites: 0,
+            };
         }
 
         ///Adds the best route from the given `search_state` if:
@@ -131,22 +139,27 @@ mod solver_data {
             {
                 return;
             }
+            self.valid_insertions += 1;
             let requests_visited = search_state.requests_visisted;
             let (best_path_index, total_distance) =
                 search_state.get_path_index_and_total_distance();
             let previous_entry = self.map.get(&requests_visited);
-            let save_or_overwrite;
+            let mut save = false;
+            let mut overwrite = false;
             match previous_entry {
                 Option::None => {
-                    save_or_overwrite = true;
+                    save = true;
                 }
                 Option::Some(previous_route) => {
-                    save_or_overwrite = total_distance < previous_route.total_distance
+                    overwrite = total_distance < previous_route.total_distance
                 }
             };
-            if save_or_overwrite {
+            if save || overwrite {
                 let new_route = Route::new(search_state, best_path_index, total_distance);
                 self.map.insert(requests_visited, Rc::new(new_route));
+                if overwrite {
+                    self.overwrites += 1;
+                }
             }
         }
     }
@@ -505,6 +518,7 @@ mod solver_data {
             current_state: &Rc<SearchState>,
             node: usize,
         ) -> Option<Rc<SearchState>> {
+            //TODO: handle depot container loading
             assert_ne!(current_state.current_node, node);
             //TODO: calculate a more realistic size, there is a maximum number of elements that can be calculated
             let vec_capacity = 20;
