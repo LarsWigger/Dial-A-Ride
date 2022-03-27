@@ -320,7 +320,7 @@ mod solver_data {
     pub struct SearchState {
         ///current node in the distance/time matrix
         current_node: usize,
-        ///all the paths leading from the previous `SearchState` to `current_node`, sorted
+        ///all the paths leading from the previous `SearchState` to `current_node`, empty path possible, indicates loading at depot
         path_options: Vec<Rc<PathOption>>,
         ///represents the containers the truck is carrying in this state
         container_data: ContainerData,
@@ -653,6 +653,81 @@ mod solver_data {
         fn get_path(&self, index: usize) -> &PathOption {
             return &self.path_options[index];
         }
+
+        pub fn get_depot_loaded(&self) -> bool {
+            return self.path_options.len() == 0;
+        }
+
+        pub fn get_containers_still_needed(&self, config: &Config) -> EmptyContainersStillNeeded {
+            let mut empty_20_delivery = 0;
+            let mut empty_40_delivery = 0;
+            for empty_delivery_node in config.get_first_empty_dropoff()..config.get_first_afs() {
+                let request = config.get_request_at_node(empty_delivery_node);
+                empty_20_delivery -= request.empty_20;
+                empty_40_delivery -= request.empty_40;
+            }
+            return EmptyContainersStillNeeded {
+                empty_20_delivery,
+                empty_40_delivery,
+            };
+        }
+
+        ///Checks whether that many empty 20- and 40-foot containers could be (un-)loaded at the depot
+        /// Also tries to avoid unecessary branching - pickung up additional containers is pointless if none need to be delivered.
+        pub fn can_handle_depot_load(
+            &self,
+            truck: &Truck,
+            containers_needed: &EmptyContainersStillNeeded,
+            change_20: i32,
+            change_40: i32,
+        ) -> bool {
+            let new_20 = self.container_data.num_20 + change_20;
+            let new_40 = self.container_data.num_40 + change_40;
+            //easy check: can that many containers be loaded at all?
+            if (new_20 < 0)
+                || (new_20 > truck.get_num_20_foot_containers())
+                || (new_40 < 0)
+                || (new_40 > truck.get_num_40_foot_containers())
+            {
+                return false;
+            }
+            //avoid unecessary branching
+            //no reason at all to pickup containers that cannot be delivered anyway
+            //this also neatly covers deloading. If it would be better to deload 2 rather than just 1, the option for 1 will be rejected
+            let new_empty_20 = self.container_data.empty_20 + change_20;
+            let new_empty_40 = self.container_data.empty_40 + change_40;
+            if (new_empty_20 > containers_needed.empty_20_delivery)
+                || (new_40 > containers_needed.empty_40_delivery)
+            {
+                return false;
+            }
+            return false;
+        }
+
+        ///
+        pub fn load_at_depot(
+            config: &Config,
+            current_state: &Rc<SearchState>,
+            change_20: i32,
+            change_40: i32,
+        ) -> Rc<SearchState> {
+            //this function should only be called when at least one path exists
+            let current_node = current_state.current_node;
+            let new_state_reference = Rc::clone(&current_state);
+            let path_options = Vec::with_capacity(0);
+            let mut new_state = SearchState {
+                current_node,
+                path_options,
+                container_data: current_state.container_data.clone(),
+                requests_visisted: current_state.requests_visisted,
+                previous_state: Option::Some(new_state_reference),
+            };
+            new_state.container_data.empty_20 += change_20;
+            new_state.container_data.empty_40 += change_40;
+            new_state.container_data.num_20 += change_20;
+            new_state.container_data.num_40 += change_40;
+            return Rc::new(new_state);
+        }
     }
 
     ///Combines all the data about the current state of loaded containers for a `SearchState`
@@ -684,6 +759,13 @@ mod solver_data {
                 full_request_2_source: 0,
             };
         }
+    }
+
+    pub struct EmptyContainersStillNeeded {
+        ///Number of empty 20-foot containers that still need to be delivered
+        empty_20_delivery: i32,
+        ///Number of empty 40-foot containers that still need to be delivered
+        empty_40_delivery: i32,
     }
 }
 use solver_data::*;
@@ -720,17 +802,59 @@ fn solve_for_truck(config: &Config, truck_index: usize) -> KnownRoutesForTruck {
     return known_options;
 }
 
+///Represents all the possible loadings done at the depot
+/// First number is addition of empty_20 containers, second of empty_40 containers
+static POSSIBLE_DEPOT_LOADS: &'static [(i32, i32)] = &[
+    //pure loading
+    (1, 0),
+    (2, 0),
+    (1, 1),
+    (0, 1),
+    //pure unloading
+    (-1, 0),
+    (-2, 0),
+    (-1, -1),
+    (0, -1),
+    //mixed
+    (1, -1),
+    (-1, 1),
+];
+
 fn solve_for_truck_recursive(
     config: &Config,
     truck: &Truck,
     known_options: &mut KnownRoutesForTruck,
     current_state: &Rc<SearchState>,
 ) {
-    //routes can end only at the dummy depot
+    //routes end at the dummy depot. I also allow ending at the depot as this makes some things more convenient
     if current_state.get_current_node() == config.get_dummy_depot() {
         known_options.possibly_add(&current_state);
         return;
     }
+    //try navigating to depot first because if it cannot be reached the rest is pointless anyway
+    if current_state.get_current_node() == 0 {
+        //only do this when the depot has not been loaded in the current_state already, otherwise infinite branching would result
+        if !current_state.get_depot_loaded() {
+            let containers_needed = current_state.get_containers_still_needed(config);
+            for (change_20, change_40) in POSSIBLE_DEPOT_LOADS {
+                if current_state.can_handle_depot_load(
+                    truck,
+                    &containers_needed,
+                    *change_20,
+                    *change_40,
+                ) {
+                    let next_state =
+                        SearchState::load_at_depot(config, &current_state, *change_20, *change_40);
+                }
+            }
+        }
+    } else {
+        let possible_depot_state = SearchState::route_to_node(config, truck, &current_state, 0);
+        match possible_depot_state {
+            Option::None => return,
+            Option::Some(state) => solve_for_truck_recursive(config, truck, known_options, &state),
+        };
+    };
     //try moving to the requests
     for request_node in 1..config.get_first_afs() {
         if current_state.can_handle_request(config, truck, request_node) {
@@ -744,20 +868,6 @@ fn solve_for_truck_recursive(
             };
         };
     }
-    //try changing containers at depot
-    //optimization potential: do this at the beginning, if the depot cannot be reached, this state is a dead end
-    //if necessary, navigate to the depot
-    let depot_state;
-    if current_state.get_current_node() == 0 {
-        depot_state = current_state;
-    } else {
-        let possible_depot_state = SearchState::route_to_node(config, truck, &current_state, 0);
-        match possible_depot_state {
-            Option::None => return,
-            Option::Some(state) => depot_state = &state,
-        };
-    };
-    //TODO: navigate to dummy depot only when no full containers are loaded, remove unnecessary check (no, it is not unnecessary, might be the start depot)
 }
 
 #[cfg(test)]

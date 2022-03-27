@@ -160,6 +160,9 @@ impl Config {
     pub fn get_first_full_dropoff(&self) -> usize {
         return self.full_pickup + self.empty_delivery + 1;
     }
+    pub fn get_first_empty_dropoff(&self) -> usize {
+        return self.get_first_full_dropoff() + self.full_pickup;
+    }
 }
 
 pub struct Solution {}
