@@ -242,6 +242,20 @@ mod solver_data {
                     }
                 }
             }
+            println!(
+                "Performed merge. There were {} own options and {} for the truck. Now there are {} options.",
+                self.option_map.len(),
+                truck_options.map.len(),
+                new_map.len()
+            );
+            let options_expected = self.option_map.len() * truck_options.map.len();
+            let options_discarded = options_expected - new_map.len();
+            let percentage_discarded =
+                (options_discarded as f64) / (options_expected as f64) * 100.;
+            println!(
+                "This means that {} option combinations out of {} were discarded, about {}%",
+                options_discarded, options_expected, percentage_discarded
+            );
             self.option_map = new_map;
             self.num_trucks_next += 1;
         }
