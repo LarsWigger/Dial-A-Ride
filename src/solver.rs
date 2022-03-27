@@ -753,8 +753,8 @@ mod solver_data {
                 assert!(newly_loaded_20 + newly_loaded_40 > 0);
             } else if request_node >= config.get_first_full_dropoff() {
                 //dropoff
-                if request_node >= config.get_first_full_dropoff() + config.get_full_pickup() {
-                    //full container dropoof
+                if request_node < config.get_first_empty_dropoff() {
+                    //full container dropoff
                     //just check whether the corresponging pickup request was visited
                     return self
                         .get_request_visited(config.get_pick_node_for_full_dropoff(request_node));
