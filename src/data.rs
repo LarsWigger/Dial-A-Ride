@@ -121,14 +121,14 @@ impl Config {
     pub fn get_depot_service_time(&self) -> u32 {
         return self.depot_service_time;
     }
-    pub fn get_service_time(&self, index: usize) -> u32 {
-        return self.service_times[index];
+    pub fn get_service_time_at_request_node(&self, request_node: usize) -> u32 {
+        return self.service_times[request_node - 1];
     }
-    pub fn get_earliest_visiting_time(&self, index: usize) -> u32 {
-        return self.earliest_visiting_times[index];
+    pub fn get_earliest_visiting_time_at_request_node(&self, request_node: usize) -> u32 {
+        return self.earliest_visiting_times[request_node - 1];
     }
-    pub fn get_latest_visiting_time(&self, index: usize) -> u32 {
-        return self.latest_visiting_times[index];
+    pub fn get_latest_visiting_time_at_request_node(&self, request_node: usize) -> u32 {
+        return self.latest_visiting_times[request_node - 1];
     }
     pub fn get_full_pickup(&self) -> usize {
         return self.full_pickup;
@@ -142,8 +142,8 @@ impl Config {
     pub fn get_afs(&self) -> usize {
         return self.afs;
     }
-    pub fn get_request_at_node(&self, node: usize) -> &ContainerRequest {
-        return &self.requests[node - 1];
+    pub fn get_request_at_node(&self, request_node: usize) -> &ContainerRequest {
+        return &self.requests[request_node - 1];
     }
     pub fn fuel_needed_for_route(&self, from: usize, to: usize) -> u32 {
         return self.get_distance_between(from, to) * FUEL_CONSUMPTION_PER_KM;

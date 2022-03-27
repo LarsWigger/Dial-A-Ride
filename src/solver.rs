@@ -317,14 +317,14 @@ mod solver_data {
             //request handling times
             if to < config.get_first_afs() {
                 if to != 0 {
-                    if total_time > config.get_latest_visiting_time(to) {
+                    if total_time > config.get_latest_visiting_time_at_request_node(to) {
                         //too late, impossible
                         return None;
-                    } else if total_time < config.get_earliest_visiting_time(to) {
+                    } else if total_time < config.get_earliest_visiting_time_at_request_node(to) {
                         //too early, just wait
-                        total_time = config.get_earliest_visiting_time(to)
+                        total_time = config.get_earliest_visiting_time_at_request_node(to)
                     }
-                    total_time += config.get_service_time(to);
+                    total_time += config.get_service_time_at_request_node(to);
                 }
             }
             if depot_service {

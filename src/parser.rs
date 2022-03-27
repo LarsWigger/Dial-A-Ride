@@ -272,9 +272,9 @@ mod parser_test {
         assert_eq!(truck.get_fuel(), 28500);
         //times
         assert_eq!(config.get_depot_service_time(), 0);
-        assert_eq!(config.get_service_time(0), 10);
-        assert_eq!(config.get_earliest_visiting_time(7), 404);
-        assert_eq!(config.get_latest_visiting_time(6), 802);
+        assert_eq!(config.get_service_time_at_request_node(1), 10);
+        assert_eq!(config.get_earliest_visiting_time_at_request_node(8), 404);
+        assert_eq!(config.get_latest_visiting_time_at_request_node(7), 802);
         //base values
         assert_eq!(config.get_full_pickup(), 2);
         assert_eq!(config.get_empty_pickup(), 2);
