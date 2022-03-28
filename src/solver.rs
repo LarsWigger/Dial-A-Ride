@@ -304,6 +304,7 @@ mod solver_data {
             previous_index: usize,
             to: usize,
             depot_service: bool,
+            new_path: bool,
         ) -> Option<PathOption> {
             let from = self.get_current_node();
             let total_distance = config.get_distance_between(from, to);
@@ -331,9 +332,14 @@ mod solver_data {
                 total_time += config.get_depot_service_time();
             }
             //create new path
-            let mut path: Vec<usize> = Vec::with_capacity(self.path.len() + 1);
-            for node in &self.path {
-                path.push(*node);
+            let mut path;
+            if new_path {
+                path = Vec::with_capacity(1);
+            } else {
+                path = Vec::with_capacity(self.path.len() + 1);
+                for node in &self.path {
+                    path.push(*node);
+                }
             }
             path.push(to);
             //create new option before possibly refueling
@@ -353,16 +359,26 @@ mod solver_data {
         }
 
         ///If currently at the depot, this function returns the next `PathOption` where the truck has been completely refilled
-        pub fn refuel_at_depot(&self, truck: &Truck, previous_index: usize) -> Option<PathOption> {
+        pub fn refuel_at_depot(
+            &self,
+            truck: &Truck,
+            previous_index: usize,
+            new_path: bool,
+        ) -> Option<PathOption> {
             //only call refuel_at_depot when already at a depot
             assert_eq!(self.get_current_node(), 0);
             //create new path
-            let mut path: Vec<usize> = Vec::with_capacity(self.path.len() + 1);
-            for node in &self.path {
-                path.push(*node);
+            let mut path;
+            if new_path {
+                path = Vec::with_capacity(1);
+            } else {
+                path = Vec::with_capacity(self.path.len() + 1);
+                for node in &self.path {
+                    path.push(*node);
+                }
             }
             path.push(ROUTE_DEPOT_REFUEL);
-            //create new option before
+            //create new option before refueling
             let mut new_option = PathOption {
                 fuel_level: self.fuel_level,
                 total_distance: self.total_distance,
@@ -561,25 +577,37 @@ mod solver_data {
             for (option_index, option) in initial_state.path_options.iter().enumerate() {
                 //target node
                 let mut new_option =
-                    option.next_path_option(config, truck, option_index, node, depot_service);
+                    option.next_path_option(config, truck, option_index, node, depot_service, true);
                 SearchState::possibly_add_to_path_options(&mut path_options, new_option);
                 //fuel stations
                 for afs in config.get_first_afs()..config.get_dummy_depot() {
-                    new_option =
-                        option.next_path_option(config, truck, option_index, afs, depot_service);
+                    new_option = option.next_path_option(
+                        config,
+                        truck,
+                        option_index,
+                        afs,
+                        depot_service,
+                        true,
+                    );
                     SearchState::possibly_add_to_path_options(&mut path_options, new_option);
                 }
                 //depot for refueling only
                 if option.get_current_node() != 0 {
                     //not already at depot, navigate to depot normally first. no reason to save this temporary one
-                    let depot_option =
-                        match option.next_path_option(config, truck, option_index, 0, false) {
-                            Option::None => continue, //cannot be reached, nothing more to to in this iteration
-                            Option::Some(tmp) => tmp,
-                        };
-                    new_option = depot_option.refuel_at_depot(truck, option_index);
+                    let depot_option = match option.next_path_option(
+                        config,
+                        truck,
+                        option_index,
+                        0,
+                        false,
+                        true,
+                    ) {
+                        Option::None => continue, //cannot be reached, nothing more to to in this iteration
+                        Option::Some(tmp) => tmp,
+                    };
+                    new_option = depot_option.refuel_at_depot(truck, option_index, false);
                 } else {
-                    new_option = option.refuel_at_depot(truck, option_index);
+                    new_option = option.refuel_at_depot(truck, option_index, true);
                 }
                 //add option where refueled at depot, new_option was set correctly before
                 SearchState::possibly_add_to_path_options(&mut path_options, new_option);
@@ -602,7 +630,14 @@ mod solver_data {
                     if option.get_current_node() != node {
                         improvement_found |= SearchState::possibly_add_to_path_options(
                             &mut path_options,
-                            option.next_path_option(config, truck, option_index, node, false),
+                            option.next_path_option(
+                                config,
+                                truck,
+                                option_index,
+                                node,
+                                false,
+                                false,
+                            ),
                         );
                     } else {
                         //refueling, makes no sense when already at target node
@@ -618,6 +653,7 @@ mod solver_data {
                                         option_index,
                                         afs,
                                         false,
+                                        false,
                                     ),
                                 );
                             }
@@ -631,19 +667,20 @@ mod solver_data {
                                 option_index,
                                 0,
                                 false,
+                                false,
                             ) {
                                 Option::None => continue, //cannot be reached, nothing to to in this iteration
                                 Option::Some(tmp) => tmp,
                             };
                             improvement_found |= SearchState::possibly_add_to_path_options(
                                 &mut path_options,
-                                tmp_option.refuel_at_depot(truck, option_index),
+                                tmp_option.refuel_at_depot(truck, option_index, false),
                             );
                         } else {
                             //already at depot
                             improvement_found |= SearchState::possibly_add_to_path_options(
                                 &mut path_options,
-                                option.refuel_at_depot(truck, option_index),
+                                option.refuel_at_depot(truck, option_index, false),
                             );
                         }
                     }
@@ -963,16 +1000,10 @@ fn solve_for_truck_recursive(
         //loading at the depot is always done in a separate state after navigating to the depot. This prevents repeated identical routing and makes parsing the route easier
         //only do this when the depot has not been loaded in the current_state already, otherwise infinite branching would result
         if !current_state.was_depot_loaded() {
-            print!("Loading depot...");
             //calculate only once
             let containers_needed = current_state.get_containers_still_needed(config);
-            println!(
-                "Containers needed: {} empty_20, {} empty_40",
-                containers_needed.empty_20_delivery, containers_needed.empty_40_delivery
-            );
             //some combinations are always nonsene, so these are not included in the predefined array
             for (change_20, change_40) in POSSIBLE_DEPOT_LOADS {
-                print!("Try loading {}|{}:", change_20, change_40);
                 if current_state.can_handle_depot_load(
                     truck,
                     &containers_needed,
@@ -982,10 +1013,7 @@ fn solve_for_truck_recursive(
                     //create new state where the loading has been applied. Due to the above condition, no loading will happen immadiately afterwards
                     let next_state =
                         SearchState::load_at_depot(config, &current_state, *change_20, *change_40);
-                    println!("Loaded");
                     solve_for_truck_recursive(config, truck, known_options, &next_state)
-                } else {
-                    println!("Not loaded");
                 }
             }
         }
