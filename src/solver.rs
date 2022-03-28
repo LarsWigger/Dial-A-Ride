@@ -358,11 +358,15 @@ mod solver_data {
             return Some(new_option);
         }
 
-        ///If currently at the depot, this function returns the next `PathOption` where the truck has been completely refilled
-        pub fn refuel_at_depot(
+        ///If currently at the depot, this function returns the next `PathOption` where the truck has been completely refilled.
+        /// If `new_path == true`, the depot service time is added to the total time.
+        /// If `new_path == true`, `self.path_options` is not copied over. This is needed when `self` is from the previous state.
+        fn refuel_at_depot(
             &self,
+            config: &Config,
             truck: &Truck,
             previous_index: usize,
+            depot_service: bool,
             new_path: bool,
         ) -> Option<PathOption> {
             //only call refuel_at_depot when already at a depot
@@ -387,6 +391,9 @@ mod solver_data {
                 previous_index,
             };
             new_option.refuel(truck);
+            if depot_service {
+                new_option.total_time += config.get_depot_service_time();
+            }
             return Option::Some(new_option);
         }
 
@@ -420,6 +427,43 @@ mod solver_data {
         pub fn refuel(&mut self, truck: &Truck) {
             self.total_time += truck.get_minutes_for_refueling(self.fuel_level);
             self.fuel_level = truck.get_fuel();
+        }
+
+        ///Tries to create a `PathOption` after this one where the truck is refueled at the depot.
+        /// If `depot_service == true`, the service time of the depot is added to the `total_time`
+        /// If `new_path == true`, `self.path_options` is not copied over. This is needed when `self` is from the previous state.
+        /// Returns `true` if the insertion into `path_options` was successful.
+        pub fn next_path_refueled_at_depot(
+            &self,
+            config: &Config,
+            truck: &Truck,
+            option_index: usize,
+            path_options: &mut Vec<Rc<PathOption>>,
+            depot_service: bool,
+            new_path: bool,
+        ) -> bool {
+            let new_option;
+            if self.get_current_node() != 0 {
+                //not already at depot, navigate to depot normally first. no reason to save this temporary one in path_options
+                let depot_option = match self.next_path_option(
+                    config,
+                    truck,
+                    option_index,
+                    0,
+                    depot_service,
+                    new_path,
+                ) {
+                    Option::None => return false, //cannot be reached, nothing more to do here
+                    Option::Some(tmp) => tmp,
+                };
+                new_option =
+                    depot_option.refuel_at_depot(config, truck, option_index, false, false);
+            } else {
+                new_option =
+                    self.refuel_at_depot(config, truck, option_index, depot_service, new_path);
+            }
+            //add option where refueled at depot, new_option was set correctly before
+            return SearchState::possibly_add_to_path_options(path_options, new_option);
         }
     }
 
@@ -591,26 +635,14 @@ mod solver_data {
                     );
                     SearchState::possibly_add_to_path_options(&mut path_options, new_option);
                 }
-                //depot for refueling only
-                if option.get_current_node() != 0 {
-                    //not already at depot, navigate to depot normally first. no reason to save this temporary one
-                    let depot_option = match option.next_path_option(
-                        config,
-                        truck,
-                        option_index,
-                        0,
-                        false,
-                        true,
-                    ) {
-                        Option::None => continue, //cannot be reached, nothing more to to in this iteration
-                        Option::Some(tmp) => tmp,
-                    };
-                    new_option = depot_option.refuel_at_depot(truck, option_index, false);
-                } else {
-                    new_option = option.refuel_at_depot(truck, option_index, true);
-                }
-                //add option where refueled at depot, new_option was set correctly before
-                SearchState::possibly_add_to_path_options(&mut path_options, new_option);
+                option.next_path_refueled_at_depot(
+                    config,
+                    truck,
+                    option_index,
+                    &mut path_options,
+                    depot_service,
+                    true,
+                );
             }
             //second step, try using previously found path_options to find a better path to somewhere (not only the depot)
             let mut improvement_found = true;
@@ -659,30 +691,14 @@ mod solver_data {
                             }
                         }
                         //at depot
-                        if current_node != 0 {
-                            //not already at depot, navigate to depot normally first, then refuel, tmp_option discarded
-                            let tmp_option = match option.next_path_option(
-                                config,
-                                truck,
-                                option_index,
-                                0,
-                                false,
-                                false,
-                            ) {
-                                Option::None => continue, //cannot be reached, nothing to to in this iteration
-                                Option::Some(tmp) => tmp,
-                            };
-                            improvement_found |= SearchState::possibly_add_to_path_options(
-                                &mut path_options,
-                                tmp_option.refuel_at_depot(truck, option_index, false),
-                            );
-                        } else {
-                            //already at depot
-                            improvement_found |= SearchState::possibly_add_to_path_options(
-                                &mut path_options,
-                                option.refuel_at_depot(truck, option_index, false),
-                            );
-                        }
+                        improvement_found |= option.next_path_refueled_at_depot(
+                            config,
+                            truck,
+                            option_index,
+                            &mut path_options,
+                            false,
+                            false,
+                        );
                     }
                 }
             }
