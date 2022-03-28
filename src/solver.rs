@@ -430,6 +430,12 @@ mod solver_data {
             return (self.get_current_node() == other.get_current_node());
         }
 
+        pub fn equivalent_to(&self, other: &PathOption) -> bool {
+            return (self.fuel_level == other.fuel_level)
+                && (self.total_distance == other.total_distance)
+                && (self.total_time == other.total_time);
+        }
+
         ///Returns the node this `PathOption` is currently at.
         /// If this was a refuel at the depot, return `0`, not the special value
         pub fn get_current_node(&self) -> usize {
@@ -617,6 +623,9 @@ mod solver_data {
             node: usize,
         ) -> Option<Rc<SearchState>> {
             assert_ne!(current_state.current_node, node);
+            if node == 8 {
+                println!("Routing from {} to {}", current_state.current_node, node);
+            }
             //TODO: calculate a more realistic size, there is a maximum number of elements that can be calculated
             let vec_capacity = 20;
             let mut path_options = Vec::with_capacity(vec_capacity);
@@ -797,6 +806,11 @@ mod solver_data {
                         if unpacked_option.partly_superior_to(comp_option) {
                             found_partly_inferior_one = true;
                         } else if comp_option.completely_superior_to(&unpacked_option) {
+                            return false;
+                        } else if comp_option.equivalent_to(&unpacked_option) {
+                            //if an equivalent option is already in path_options and another option is partially inferior,
+                            //unpacked_option would be added even thoug something equivalent one is already there
+                            //this is not just inefficient, it causes an infinite loop, so this seemingly redundant case is essential
                             return false;
                         }
                     }
