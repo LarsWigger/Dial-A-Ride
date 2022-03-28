@@ -267,16 +267,17 @@ mod solver_data {
 
     ///Represents a single PathOption. When navigating between two nodes, stops at fuel stations might be necessary or optional.
     /// These multiple possible paths differ in three summary values that are relevant for us:
-    /// - `fuel_level`: The fuel level of the vehicle at the last node. There is no "better" value, due to longer refueling times a lower `fuel_level` for refueling might be better
-    ///     in some scenarios. However, for a single route, there are not that many different values for `fuel_level`:
-    ///     - the `fuel_level` after arriving right from the original node
-    ///     - the respective `fuel_level` after arriving from particular AFS or the depot after refueling, one for each
-    ///     - stopping at a different request first could lead to a different `fuel_level` upon arrival, but this is covered by routing to that request first and as such, not relevant here
+    /// - `fuel_level`: The fuel level of the vehicle at the last node. All else being equal, higher is better as that meaens:
+    ///     - less additional stops needed (or at least no difference/disadvantage)
+    ///     - less time taken when refueling later and less time is always an advantage
     /// - `total_distance`: The total distance travelled by the vehicle at the last node. All else being equal, lower is always better.
-    /// - `total_time`: The total time, might include waiting and fueling times. All else being equal, lower is always better
+    /// - `total_time`: The total time, might include waiting and fueling times. All else being equal, lower is always better. If too early, waiting is still possible
     ///
     /// Comparisons between paths ending at different nodes are obviously pointless.
     /// The concrete path is not relevant for the comparison of different paths, these three summary values describe it completely.
+    /// There can be at most 9 different `PathOption`s connecting two nodes.
+    /// If there were one more, one of the 10 options would be completely inferior to another, reducing the number back to 9 (mathematical proof not shown here).
+    /// There can be less than 9 `PathOption`s, though.
     struct PathOption {
         ///the fuel level of the vehicle at the last node, in 0.01l to avoid floating point operations
         fuel_level: u32,
@@ -400,24 +401,29 @@ mod solver_data {
 
         ///Returns `true` if `self` would be preferred over `other` in every scenario.
         /// Also checks whether the two paths are comparable in the first place.
+        /// This criterium includes `partly_superior_to`.
         pub fn completely_superior_to(&self, other: &PathOption) -> bool {
             return self.comparable_to(other)
-                //check whether not worse in either regard
+                //at least one value must be clearly better
+                && self.partly_superior_to(other)
+                //check whether not worse in any regard
                 && (self.total_distance <= other.total_distance)
-                && (self.total_time <= other.total_time);
+                && (self.total_time <= other.total_time)
+                && (self.fuel_level >= other.fuel_level);
         }
 
         ///Returns `true` if `self` might be preferable over `other` in a certain scenario.
         /// Does not check whether the two paths are comparable in the first place.
+        /// Weaker criterium than `completely_superior_to`, included the the latter.
         pub fn partly_superior_to(&self, other: &PathOption) -> bool {
             return (self.total_distance < other.total_distance)
-                || (self.total_time < other.total_time);
+                || (self.total_time < other.total_time)
+                || (self.fuel_level > other.fuel_level);
         }
 
         ///Returns `true` if the two `PathOption`s are comparable, meaning that they are at the same node and have the same fuel level.
         pub fn comparable_to(&self, other: &PathOption) -> bool {
-            return (self.get_current_node() == other.get_current_node())
-                && (self.fuel_level == other.fuel_level);
+            return (self.get_current_node() == other.get_current_node());
         }
 
         ///Returns the node this `PathOption` is currently at.
