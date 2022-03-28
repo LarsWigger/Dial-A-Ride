@@ -183,6 +183,8 @@ mod solver_data {
         option_map: HashMap<u64, CombinationOption>,
         ///the number of trucks covered after the next union, needed for knowing how many to elements a single vector needs
         num_trucks_next: usize,
+        ///performance metric to accurately estimate how many unnecessary branches were avoided
+        num_compatible_combinations: usize,
     }
 
     //possible TODO: the vectors are initialized with the maximum size even though it is not needed.
@@ -192,6 +194,7 @@ mod solver_data {
             return AllKnownOptions {
                 option_map,
                 num_trucks_next: 1,
+                num_compatible_combinations: 0,
             };
         }
 
@@ -215,6 +218,7 @@ mod solver_data {
         /// This combination is inserted if there is either no previous one or if it has a lower `total_distance`.
         /// In order to avoid conflicts, the original map is replaced with a new one without being changed itself
         pub fn subsequent_merge(&mut self, truck_options: &KnownRoutesForTruck) {
+            self.num_compatible_combinations = 0;
             //performing this operation in place could lead to problems
             let mut new_map: HashMap<u64, CombinationOption> = HashMap::new();
             for (own_key, own_value) in &self.option_map {
@@ -222,6 +226,7 @@ mod solver_data {
                     //only if there is no clear conflict between these two routes
                     //meaning, no request visited by both
                     if own_key & other_key == 0 {
+                        self.num_compatible_combinations += 1;
                         let combined_key = own_key | other_key;
                         let combined_distance =
                             own_value.total_distance + other_value.total_distance;
@@ -253,12 +258,18 @@ mod solver_data {
                 new_map.len()
             );
             let options_expected = self.option_map.len() * truck_options.map.len();
-            let options_discarded = options_expected - new_map.len();
-            let percentage_discarded =
-                (options_discarded as f64) / (options_expected as f64) * 100.;
+            let percentage_valid =
+                (self.num_compatible_combinations as f64) / (options_expected as f64) * 100.;
             println!(
-                "This means that {} option combinations out of {} were discarded, about {:.0}%.",
-                options_discarded, options_expected, percentage_discarded
+                "{} option combinations out of {} were valid, about {:.0}%.",
+                self.num_compatible_combinations, options_expected, percentage_valid
+            );
+            let valid_options_discarded = self.num_compatible_combinations - new_map.len();
+            let percentage_discarded =
+                (valid_options_discarded as f64) / (self.num_compatible_combinations as f64) * 100.;
+            println!(
+                "Out of these valid options, {} / {:.0}% were discarded.",
+                valid_options_discarded, percentage_discarded
             );
             self.option_map = new_map;
             self.num_trucks_next += 1;
