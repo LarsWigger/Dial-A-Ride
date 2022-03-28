@@ -973,11 +973,12 @@ mod solver_data {
             let containers_needed = self.get_containers_still_needed(config);
             for (change_20, change_40) in POSSIBLE_DEPOT_LOADS {
                 if self.can_handle_depot_load(truck, &containers_needed, *change_20, *change_40) {
-                    return true;
+                    return true; //one possible load is enough
                 }
             }
-            //no reason routing there if: no containers can be loaded or unloaded and there are full containers onboard
-            return true;
+            //if nothing can be loaded, can at least the route be finished here?
+            return (self.container_data.full_request_1_source == 0)
+                && (self.container_data.full_request_2_source == 0);
         }
     }
 
@@ -1021,7 +1022,7 @@ mod solver_data {
 
     ///Represents all the possible loadings done at the depot
     /// First number is addition of empty_20 containers, second of empty_40 containers
-    static POSSIBLE_DEPOT_LOADS: &'static [(i8, i8)] = &[
+    pub static POSSIBLE_DEPOT_LOADS: &'static [(i8, i8)] = &[
         //pure loading
         (1, 0),
         (2, 0),
@@ -1081,24 +1082,6 @@ fn solve_for_truck(config: &Config, truck_index: usize) -> KnownRoutesForTruck {
     return known_options;
 }
 
-///Represents all the possible loadings done at the depot
-/// First number is addition of empty_20 containers, second of empty_40 containers
-static POSSIBLE_DEPOT_LOADS: &'static [(i8, i8)] = &[
-    //pure loading
-    (1, 0),
-    (2, 0),
-    (1, 1),
-    (0, 1),
-    //pure unloading
-    (-1, 0),
-    (-2, 0),
-    (-1, -1),
-    (0, -1),
-    //mixed
-    (1, -1),
-    (-1, 1),
-];
-
 fn solve_for_truck_recursive(
     config: &Config,
     truck: &Truck,
@@ -1133,7 +1116,8 @@ fn solve_for_truck_recursive(
             }
         }
     } else if current_state.can_anything_be_done_at_depot(config, truck) {
-        //not already at depot, try routing to it only if something can be done there, namely loading or unloading of containers
+        //not already at depot, try routing to it only if something can be done there, namely container (un-)loading or ending the route
+
         let possible_depot_state = SearchState::route_to_node(config, truck, &current_state, 0);
         match possible_depot_state {
             Option::None => return,
