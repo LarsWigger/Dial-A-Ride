@@ -297,6 +297,8 @@ mod solver_data {
         /// Returns `None` if there is no possible path, which may be if:
         /// - fuel is insufficient
         /// - arrival time is too late
+        /// If `new_path == true`, the depot service time is added to the total time.
+        /// If `new_path == true`, `self.path_options` is not copied over. This is needed when `self` is from the previous state.
         pub fn next_path_option(
             &self,
             config: &Config,
@@ -424,7 +426,7 @@ mod solver_data {
             return last_el;
         }
 
-        pub fn refuel(&mut self, truck: &Truck) {
+        fn refuel(&mut self, truck: &Truck) {
             self.total_time += truck.get_minutes_for_refueling(self.fuel_level);
             self.fuel_level = truck.get_fuel();
         }
@@ -433,7 +435,7 @@ mod solver_data {
         /// If `depot_service == true`, the service time of the depot is added to the `total_time`
         /// If `new_path == true`, `self.path_options` is not copied over. This is needed when `self` is from the previous state.
         /// Returns `true` if the insertion into `path_options` was successful.
-        pub fn next_path_refueled_at_depot(
+        pub fn try_refueling_at_depot(
             &self,
             config: &Config,
             truck: &Truck,
@@ -604,104 +606,16 @@ mod solver_data {
             //TODO: calculate a more realistic size, there is a maximum number of elements that can be calculated
             let vec_capacity = 20;
             let mut path_options = Vec::with_capacity(vec_capacity);
-            let initial_state;
-            let depot_service;
-            //handle special case where depot was loaded in the previous state
-            if current_state.was_depot_loaded() {
-                initial_state = match &current_state.previous_state {
-                    Option::None => panic!("SHOULD NEVER HAPPEN!"),
-                    Option::Some(state) => state,
-                };
-                depot_service = true;
-            } else {
-                initial_state = current_state;
-                depot_service = false;
-            }
-            //first step, use paths from initial_state to go directly to node or fuel stations or depot
-            for (option_index, option) in initial_state.path_options.iter().enumerate() {
-                //target node
-                let mut new_option =
-                    option.next_path_option(config, truck, option_index, node, depot_service, true);
-                SearchState::possibly_add_to_path_options(&mut path_options, new_option);
-                //fuel stations
-                for afs in config.get_first_afs()..config.get_dummy_depot() {
-                    new_option = option.next_path_option(
-                        config,
-                        truck,
-                        option_index,
-                        afs,
-                        depot_service,
-                        true,
-                    );
-                    SearchState::possibly_add_to_path_options(&mut path_options, new_option);
-                }
-                option.next_path_refueled_at_depot(
-                    config,
-                    truck,
-                    option_index,
-                    &mut path_options,
-                    depot_service,
-                    true,
-                );
-            }
+            //first step, initial filling using the PathOptions from this state
+            SearchState::fill_with_path_options_from_previous_state(
+                config,
+                truck,
+                current_state,
+                node,
+                &mut path_options,
+            );
             //second step, try using previously found path_options to find a better path to somewhere (not only the depot)
-            let mut improvement_found = true;
-            let mut iteration_clone = Vec::with_capacity(vec_capacity);
-            while improvement_found {
-                improvement_found = false;
-                //iterate over efficient copy of path_options because compiler complains otherwise
-                iteration_clone.retain(|_| false);
-                for index in 0..path_options.len() {
-                    let option = Rc::clone(&path_options[index]);
-                    iteration_clone.push(option);
-                }
-                for (option_index, option) in iteration_clone.iter().enumerate() {
-                    //save for repeated usage:
-                    let current_node = option.get_current_node();
-                    //to target node
-                    if option.get_current_node() != node {
-                        improvement_found |= SearchState::possibly_add_to_path_options(
-                            &mut path_options,
-                            option.next_path_option(
-                                config,
-                                truck,
-                                option_index,
-                                node,
-                                false,
-                                false,
-                            ),
-                        );
-                    } else {
-                        //refueling, makes no sense when already at target node
-                        //at AFS
-                        for afs in config.get_first_afs()..config.get_dummy_depot() {
-                            //routing from itself to itself is completely pointless
-                            if current_node != afs {
-                                improvement_found |= SearchState::possibly_add_to_path_options(
-                                    &mut path_options,
-                                    option.next_path_option(
-                                        config,
-                                        truck,
-                                        option_index,
-                                        afs,
-                                        false,
-                                        false,
-                                    ),
-                                );
-                            }
-                        }
-                        //at depot
-                        improvement_found |= option.next_path_refueled_at_depot(
-                            config,
-                            truck,
-                            option_index,
-                            &mut path_options,
-                            false,
-                            false,
-                        );
-                    }
-                }
-            }
+            SearchState::fill_with_following_paths(config, truck, node, &mut path_options);
             //third step, remove anything that does not end at the target node
             path_options.retain(|option| option.get_current_node() == node);
             if path_options.len() == 0 {
@@ -713,6 +627,129 @@ mod solver_data {
                     current_state,
                     path_options,
                 ));
+            }
+        }
+
+        ///Helper function to separate code. Fills `path_options` with the ones that can be reached from the ones in `current_state`.
+        /// The paths from `current_state` are not copied as they
+        fn fill_with_path_options_from_previous_state(
+            config: &Config,
+            truck: &Truck,
+            current_state: &Rc<SearchState>,
+            node: usize,
+            path_options: &mut Vec<Rc<PathOption>>,
+        ) {
+            let initial_state;
+            let depot_service;
+            if current_state.was_depot_loaded() {
+                initial_state = match &current_state.previous_state {
+                    Option::None => panic!("SHOULD NEVER HAPPEN!"),
+                    Option::Some(state) => state,
+                };
+                depot_service = true;
+            } else {
+                initial_state = current_state;
+                depot_service = false;
+            }
+            //first step, use paths from initial_state to go directly to node or fuel stations or depot
+            for (previous_index, option) in initial_state.path_options.iter().enumerate() {
+                //target node
+                let mut new_option = option.next_path_option(
+                    config,
+                    truck,
+                    previous_index,
+                    node,
+                    depot_service,
+                    true,
+                );
+                SearchState::possibly_add_to_path_options(path_options, new_option);
+                //fuel stations
+                for afs in config.get_first_afs()..config.get_dummy_depot() {
+                    new_option = option.next_path_option(
+                        config,
+                        truck,
+                        previous_index,
+                        afs,
+                        depot_service,
+                        true,
+                    );
+                    SearchState::possibly_add_to_path_options(path_options, new_option);
+                }
+                option.try_refueling_at_depot(
+                    config,
+                    truck,
+                    previous_index,
+                    path_options,
+                    depot_service,
+                    true,
+                );
+            }
+        }
+
+        ///Extends the paths already in `path_options` trying to route to `node`
+        fn fill_with_following_paths(
+            config: &Config,
+            truck: &Truck,
+            node: usize,
+            path_options: &mut Vec<Rc<PathOption>>,
+        ) {
+            let mut improvement_found = true;
+            let mut iteration_clone = Vec::with_capacity(path_options.capacity());
+            while improvement_found {
+                improvement_found = false;
+                //iterate over efficient copy of path_options because compiler complains otherwise
+                iteration_clone.retain(|_| false);
+                for index in 0..path_options.len() {
+                    let option = Rc::clone(&path_options[index]);
+                    iteration_clone.push(option);
+                }
+                //iterate over all the options known so far and see whether they lead to a new interesting option
+                for option in iteration_clone.iter() {
+                    //save for repeated usage:
+                    let current_node = option.get_current_node();
+                    //straight to target node, only reasonable when not already there
+                    if option.get_current_node() != node {
+                        improvement_found |= SearchState::possibly_add_to_path_options(
+                            path_options,
+                            option.next_path_option(
+                                config,
+                                truck,
+                                option.previous_index,
+                                node,
+                                false,
+                                false,
+                            ),
+                        );
+                    } else {
+                        //refueling, makes no sense when already at target node
+                        //refuel at a particular AFS
+                        for afs in config.get_first_afs()..config.get_dummy_depot() {
+                            //routing from itself to itself is completely pointless
+                            if current_node != afs {
+                                improvement_found |= SearchState::possibly_add_to_path_options(
+                                    path_options,
+                                    option.next_path_option(
+                                        config,
+                                        truck,
+                                        option.previous_index,
+                                        afs,
+                                        false,
+                                        false,
+                                    ),
+                                );
+                            }
+                        }
+                        //at depot
+                        improvement_found |= option.try_refueling_at_depot(
+                            config,
+                            truck,
+                            option.previous_index,
+                            path_options,
+                            false,
+                            false,
+                        );
+                    }
+                }
             }
         }
 
