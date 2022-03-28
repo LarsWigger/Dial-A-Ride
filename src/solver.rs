@@ -721,7 +721,7 @@ mod solver_data {
                 for option in iteration_clone.iter() {
                     //save for repeated usage:
                     let current_node = option.get_current_node();
-                    //straight to target node, only reasonable when not already there
+                    //going away from the target node is both forbidden and pointless
                     if option.get_current_node() != node {
                         improvement_found |= SearchState::possibly_add_to_path_options(
                             path_options,
@@ -734,7 +734,6 @@ mod solver_data {
                                 false,
                             ),
                         );
-                    } else {
                         //refueling, makes no sense when already at target node
                         //refuel at a particular AFS
                         for afs in config.get_first_afs()..config.get_dummy_depot() {
