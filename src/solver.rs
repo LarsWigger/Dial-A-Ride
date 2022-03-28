@@ -310,13 +310,17 @@ mod solver_data {
             new_path: bool,
         ) -> Option<PathOption> {
             let from = self.get_current_node();
-            let total_distance = self.total_distance + config.get_distance_between(from, to);
-            let fuel_needed = config.fuel_needed_for_route(from, to);
+            assert_ne!(from, to);
+            //calculate new total distance
+            let additional_distance = config.get_distance_between(from, to);
+            let total_distance = self.total_distance + additional_distance;
+            //calculate fuel level on arrival
+            let fuel_needed = config.get_fuel_needed_for_distance(additional_distance);
             if fuel_needed > self.fuel_level {
                 return None;
             }
             let fuel_level = self.fuel_level - fuel_needed;
-            //deal with handling and refueling times
+            //calculate new total_time, dealing with handling and refueling times
             let mut total_time = self.total_time + config.get_time_between(from, to);
             //request handling times
             if to < config.get_first_afs() {

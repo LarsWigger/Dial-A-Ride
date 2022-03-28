@@ -145,8 +145,8 @@ impl Config {
     pub fn get_request_at_node(&self, request_node: usize) -> &ContainerRequest {
         return &self.requests[request_node - 1];
     }
-    pub fn fuel_needed_for_route(&self, from: usize, to: usize) -> u32 {
-        return self.get_distance_between(from, to) * FUEL_CONSUMPTION_PER_KM;
+    pub fn get_fuel_needed_for_distance(&self, distance: u32) -> u32 {
+        return distance * FUEL_CONSUMPTION_PER_KM;
     }
     pub fn get_first_afs(&self) -> usize {
         return 2 * self.full_pickup + self.empty_pickup + self.empty_delivery + 1;
