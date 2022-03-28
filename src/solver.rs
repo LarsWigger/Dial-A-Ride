@@ -161,8 +161,8 @@ mod solver_data {
                 / (self.valid_insertions as f64)
                 * 100.;
             println!(
-                "So there are {} routes remaining and {}% were discarded",
-                self.map.len(),
+                "So {} routes / about {:.0}% were discarded.",
+                self.valid_insertions - self.map.len(),
                 percentage_discarded
             );
         }
