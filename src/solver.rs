@@ -1100,7 +1100,7 @@ fn solve_for_truck_recursive(
         if !current_state.was_depot_loaded() {
             //calculate only once
             let containers_needed = current_state.get_containers_still_needed(config);
-            //some combinations are always nonsene, so these are not included in the predefined array
+            //some combinations are always nonsense, so these are not included in the predefined array
             for (change_20, change_40) in POSSIBLE_DEPOT_LOADS {
                 if current_state.can_handle_depot_load(
                     truck,
@@ -1117,10 +1117,9 @@ fn solve_for_truck_recursive(
         }
     } else if current_state.can_anything_be_done_at_depot(config, truck) {
         //not already at depot, try routing to it only if something can be done there, namely container (un-)loading or ending the route
-
         let possible_depot_state = SearchState::route_to_node(config, truck, &current_state, 0);
         match possible_depot_state {
-            Option::None => return,
+            Option::None => return, //if the depot cannot be reached, the route cannot be ended anyway, so stop here
             Option::Some(state) => solve_for_truck_recursive(config, truck, known_options, &state),
         };
     };
