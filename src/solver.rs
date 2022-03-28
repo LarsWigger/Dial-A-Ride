@@ -779,7 +779,6 @@ mod solver_data {
             };
             //to detect whether something was removed
             let original_length = path_options.len();
-
             //remove the entries that are completely inferior to the new one (CAN THIS EVEN HAPPEN?)
             path_options.retain(|option| !unpacked_option.completely_superior_to(&option));
             if original_length != path_options.len() {
@@ -967,6 +966,19 @@ mod solver_data {
             new_state.container_data.num_40 += change_40;
             return Rc::new(new_state);
         }
+
+        ///Checks whether there is a scenario where routing to the depot might make sense.
+        /// This is a cheap calculation (scales linearly) that might prevent branching (scales exponentially).
+        pub fn can_anything_be_done_at_depot(&self, config: &Config, truck: &Truck) -> bool {
+            let containers_needed = self.get_containers_still_needed(config);
+            for (change_20, change_40) in POSSIBLE_DEPOT_LOADS {
+                if self.can_handle_depot_load(truck, &containers_needed, *change_20, *change_40) {
+                    return true;
+                }
+            }
+            //no reason routing there if: no containers can be loaded or unloaded and there are full containers onboard
+            return true;
+        }
     }
 
     ///Combines all the data about the current state of loaded containers for a `SearchState`
@@ -1006,6 +1018,24 @@ mod solver_data {
         ///Number of empty 40-foot containers that still need to be delivered
         pub empty_40_delivery: i8,
     }
+
+    ///Represents all the possible loadings done at the depot
+    /// First number is addition of empty_20 containers, second of empty_40 containers
+    static POSSIBLE_DEPOT_LOADS: &'static [(i8, i8)] = &[
+        //pure loading
+        (1, 0),
+        (2, 0),
+        (1, 1),
+        (0, 1),
+        //pure unloading
+        (-1, 0),
+        (-2, 0),
+        (-1, -1),
+        (0, -1),
+        //mixed
+        (1, -1),
+        (-1, 1),
+    ];
 }
 use solver_data::*;
 use std::rc::Rc;
@@ -1096,15 +1126,14 @@ fn solve_for_truck_recursive(
                     *change_40,
                 ) {
                     //create new state where the loading has been applied. Due to the above condition, no loading will happen immadiately afterwards
-                    let next_state =
+                    let loaded_state =
                         SearchState::load_at_depot(config, &current_state, *change_20, *change_40);
-                    solve_for_truck_recursive(config, truck, known_options, &next_state)
+                    solve_for_truck_recursive(config, truck, known_options, &loaded_state)
                 }
             }
         }
-        //if already at the depot and loaded, has to move somewhere else and the only option for this are requests
-    } else {
-        //not already at depot, try routing to it. If it cannot be reached, the route can't be finished so this search may already be interrupted
+    } else if current_state.can_anything_be_done_at_depot(config, truck) {
+        //not already at depot, try routing to it only if something can be done there, namely loading or unloading of containers
         let possible_depot_state = SearchState::route_to_node(config, truck, &current_state, 0);
         match possible_depot_state {
             Option::None => return,
