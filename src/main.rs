@@ -13,9 +13,12 @@ fn main() {
     let sample_number;
     let scenario;
     let mut arg_offset = 0;
+    let verbose;
     if args().nth(1).expect("No arguments found") == String::from("--verbose") {
-        println!("verbose");
         arg_offset += 1;
+        verbose = true;
+    } else {
+        verbose = false;
     }
     full_pickup = args()
         .nth(1 + arg_offset)
@@ -54,6 +57,7 @@ fn main() {
         afs,
         sample_number,
         scenario,
+        verbose,
     );
-    let solution = solver::solve(config);
+    let solution = solver::solve(config, verbose);
 }

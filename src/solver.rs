@@ -185,15 +185,18 @@ mod solver_data {
         num_trucks_next: usize,
         ///performance metric to accurately estimate how many unnecessary branches were avoided
         num_compatible_combinations: usize,
+        ///whether summaries of merges should be printed to the terminal
+        verbose: bool,
     }
 
     impl AllKnownOptions {
-        pub fn new() -> AllKnownOptions {
+        pub fn new(verbose: bool) -> AllKnownOptions {
             let option_map = HashMap::new();
             return AllKnownOptions {
                 option_map,
                 num_trucks_next: 1,
                 num_compatible_combinations: 0,
+                verbose,
             };
         }
 
@@ -250,26 +253,29 @@ mod solver_data {
                     }
                 }
             }
-            println!(
+            if self.verbose {
+                println!(
                 "Performed merge. There were {} previously known options and {} for the current truck. Now there are {} options.",
                 self.option_map.len(),
                 truck_options.map.len(),
                 new_map.len()
             );
-            let options_expected = self.option_map.len() * truck_options.map.len();
-            let percentage_valid =
-                (self.num_compatible_combinations as f64) / (options_expected as f64) * 100.;
-            println!(
-                "{} option combinations out of {} were valid, about {:.0}%.",
-                self.num_compatible_combinations, options_expected, percentage_valid
-            );
-            let valid_options_discarded = self.num_compatible_combinations - new_map.len();
-            let percentage_discarded =
-                (valid_options_discarded as f64) / (self.num_compatible_combinations as f64) * 100.;
-            println!(
-                "Out of these valid options, {} / {:.0}% were discarded.",
-                valid_options_discarded, percentage_discarded
-            );
+                let options_expected = self.option_map.len() * truck_options.map.len();
+                let percentage_valid =
+                    (self.num_compatible_combinations as f64) / (options_expected as f64) * 100.;
+                println!(
+                    "{} option combinations out of {} were valid, about {:.0}%.",
+                    self.num_compatible_combinations, options_expected, percentage_valid
+                );
+                let valid_options_discarded = self.num_compatible_combinations - new_map.len();
+                let percentage_discarded = (valid_options_discarded as f64)
+                    / (self.num_compatible_combinations as f64)
+                    * 100.;
+                println!(
+                    "Out of these valid options, {} / {:.0}% were discarded.",
+                    valid_options_discarded, percentage_discarded
+                );
+            }
             self.option_map = new_map;
             self.num_trucks_next += 1;
         }
@@ -1062,44 +1068,45 @@ mod solver_data {
 use solver_data::*;
 use std::rc::Rc;
 
-pub fn solve(config: Config) -> Solution {
-    let mut all_known_options = AllKnownOptions::new();
-    let current_truck = config.get_truck(0);
-    let mut options_for_truck = solve_for_truck(&config, 0);
-    options_for_truck.summarize_to_terminal();
+pub fn solve(config: Config, verbose: bool) -> Solution {
+    let mut all_known_options = AllKnownOptions::new(verbose);
+    let mut options_for_truck = solve_for_truck(&config, 0, verbose);
     all_known_options.inital_merge(&options_for_truck);
-    println!("");
     for truck_index in 1..config.get_num_trucks() {
         let current_truck = config.get_truck(truck_index);
         //avoid unnecessary recalculation of options_for_truck
         if config.get_truck(truck_index - 1) != current_truck {
-            options_for_truck = solve_for_truck(&config, truck_index);
-            options_for_truck.summarize_to_terminal();
-        } else {
+            options_for_truck = solve_for_truck(&config, truck_index, verbose);
+        } else if verbose {
             println!(
-                "Truck {} is identical to the one before, no calculation necessary.",
+                "\nTruck {} is identical to the one before, no calculation necessary.",
                 truck_index
             );
         }
         all_known_options.subsequent_merge(&options_for_truck);
-        println!(""); //newline for better readability
     }
     return Solution {};
 }
 
 ///Calculates all the known options for truck at given index
-fn solve_for_truck(config: &Config, truck_index: usize) -> KnownRoutesForTruck {
-    println!("Calculating options for truck {} ...", truck_index);
+fn solve_for_truck(config: &Config, truck_index: usize, verbose: bool) -> KnownRoutesForTruck {
     let truck = config.get_truck(truck_index);
-    println!(
-        "Truck can load {} 20- and {} 40-foot containers, having a fuel capacity of {}.",
-        truck.get_num_20_foot_containers(),
-        truck.get_num_40_foot_containers(),
-        truck.get_fuel() / 100
-    );
+    if verbose {
+        println!("\nCalculating options for truck {} ...", truck_index);
+        println!(
+            "Truck can load {} 20- and {} 40-foot containers, having a fuel capacity of {}.",
+            truck.get_num_20_foot_containers(),
+            truck.get_num_40_foot_containers(),
+            truck.get_fuel() / 100
+        );
+    }
+
     let root_state = SearchState::start_state(truck.get_fuel());
     let mut known_options = KnownRoutesForTruck::new();
     solve_for_truck_recursive(config, &truck, &mut known_options, &root_state);
+    if verbose {
+        known_options.summarize_to_terminal();
+    }
     return known_options;
 }
 

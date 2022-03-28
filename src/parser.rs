@@ -94,11 +94,14 @@ pub fn parse(
     afs: usize,
     sample_number: usize,
     scenario: usize,
+    verbose: bool,
 ) -> Config {
-    println!(
-        "Parsing input: {} {} {} {} {} {}",
-        full_pickup, empty_pickup, empty_delivery, afs, sample_number, scenario
-    );
+    if verbose {
+        println!(
+            "Parsing configuration: {} {} {} {} {} {}",
+            full_pickup, empty_pickup, empty_delivery, afs, sample_number, scenario
+        );
+    }
     //setup data needed for parsing
     let mut identifier = DataIdentifier {
         full_pickup: full_pickup,
@@ -168,7 +171,6 @@ fn parse_requests(identifier: &DataIdentifier, base_path: &Path) -> Vec<Containe
 
 fn parse_num_trucks_and_t_max(identifier: &mut DataIdentifier, base_path: &Path) {
     let path = base_path.join(identifier.get_base_file_name());
-    println!("Parsing {} ...", path.display());
     let file_string = fs::read_to_string(path).unwrap();
     let mut lines = file_string.lines();
     //remove header and the lines before the intended one
@@ -254,7 +256,7 @@ mod parser_test {
     use crate::parser;
     #[test]
     fn parse_2_2_2_2_1_2() {
-        let config = parser::parse(2, 2, 2, 2, 1, 2);
+        let config = parser::parse(2, 2, 2, 2, 1, 2, false);
         //test distance matrix
         assert_eq!(config.get_distance_between(0, 0), 0);
         assert_eq!(config.get_distance_between(3, 2), 199);
