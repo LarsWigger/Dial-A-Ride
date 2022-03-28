@@ -722,7 +722,8 @@ mod solver_data {
                     //save for repeated usage:
                     let current_node = option.get_current_node();
                     //going away from the target node is both forbidden and pointless
-                    if option.get_current_node() != node {
+                    if current_node != node {
+                        //straight to target node
                         improvement_found |= SearchState::possibly_add_to_path_options(
                             path_options,
                             option.next_path_option(
@@ -734,7 +735,6 @@ mod solver_data {
                                 false,
                             ),
                         );
-                        //refueling, makes no sense when already at target node
                         //refuel at a particular AFS
                         for afs in config.get_first_afs()..config.get_dummy_depot() {
                             //routing from itself to itself is completely pointless
@@ -752,7 +752,7 @@ mod solver_data {
                                 );
                             }
                         }
-                        //at depot
+                        //refuel at depot
                         improvement_found |= option.try_refueling_at_depot(
                             config,
                             truck,
