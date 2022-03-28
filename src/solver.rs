@@ -836,8 +836,8 @@ mod solver_data {
             &self,
             truck: &Truck,
             containers_needed: &EmptyContainersStillNeeded,
-            change_20: i32,
-            change_40: i32,
+            change_20: i8,
+            change_40: i8,
         ) -> bool {
             let new_20 = self.container_data.num_20 + change_20;
             let new_40 = self.container_data.num_40 + change_40;
@@ -867,8 +867,8 @@ mod solver_data {
         pub fn load_at_depot(
             config: &Config,
             current_state: &Rc<SearchState>,
-            change_20: i32,
-            change_40: i32,
+            change_20: i8,
+            change_40: i8,
         ) -> Rc<SearchState> {
             //this function should only be called when at least one path exists
             let current_node = current_state.current_node;
@@ -893,13 +893,13 @@ mod solver_data {
     #[derive(Copy, Clone)]
     struct ContainerData {
         ///number of empty 20 foot containers loaded
-        empty_20: i32,
+        empty_20: i8,
         ///number of empty 40 foot containers loaded
-        empty_40: i32,
+        empty_40: i8,
         ///number of 20 foot containers (empty + full) loaded. Saving it this way saves computations
-        num_20: i32,
+        num_20: i8,
         ///number of 40 foot containers (empty + full) loaded. Saving it this way saves computations
-        num_40: i32,
+        num_40: i8,
         ///if a full container is loaded, its origin is saved here or in `full_request_2_source`. 0 indicates nothing saved at the moment
         full_request_1_source: usize,
         ///see `full_request_1_source`
@@ -922,9 +922,9 @@ mod solver_data {
 
     pub struct EmptyContainersStillNeeded {
         ///Number of empty 20-foot containers that still need to be delivered
-        pub empty_20_delivery: i32,
+        pub empty_20_delivery: i8,
         ///Number of empty 40-foot containers that still need to be delivered
-        pub empty_40_delivery: i32,
+        pub empty_40_delivery: i8,
     }
 }
 use solver_data::*;
@@ -973,7 +973,7 @@ fn solve_for_truck(config: &Config, truck_index: usize) -> KnownRoutesForTruck {
 
 ///Represents all the possible loadings done at the depot
 /// First number is addition of empty_20 containers, second of empty_40 containers
-static POSSIBLE_DEPOT_LOADS: &'static [(i32, i32)] = &[
+static POSSIBLE_DEPOT_LOADS: &'static [(i8, i8)] = &[
     //pure loading
     (1, 0),
     (2, 0),

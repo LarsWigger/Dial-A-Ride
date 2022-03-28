@@ -1,13 +1,13 @@
 #[derive(PartialEq, Eq, PartialOrd, Ord)]
 pub struct Truck {
-    num_20_foot_containers: i32,
-    num_40_foot_containers: i32,
+    num_20_foot_containers: i8,
+    num_40_foot_containers: i8,
     //in 0.01l to avoid floating point operations, works only with the given consumption rate of 0.45l/km and refuel rate of 10l/min
     fuel: u32,
 }
 
 impl Truck {
-    pub fn new(num_20_foot_containers: i32, num_40_foot_containers: i32, fuel: u32) -> Truck {
+    pub fn new(num_20_foot_containers: i8, num_40_foot_containers: i8, fuel: u32) -> Truck {
         return Truck {
             num_20_foot_containers,
             num_40_foot_containers,
@@ -15,12 +15,12 @@ impl Truck {
         };
     }
 
-    pub fn get_num_20_foot_containers(&self) -> i32 {
-        return self.num_20_foot_containers as i32;
+    pub fn get_num_20_foot_containers(&self) -> i8 {
+        return self.num_20_foot_containers;
     }
 
-    pub fn get_num_40_foot_containers(&self) -> i32 {
-        return self.num_40_foot_containers as i32;
+    pub fn get_num_40_foot_containers(&self) -> i8 {
+        return self.num_40_foot_containers;
     }
 
     pub fn get_fuel(&self) -> u32 {
@@ -41,10 +41,10 @@ impl Truck {
 }
 
 pub struct ContainerRequest {
-    pub full_20: i32,
-    pub empty_20: i32,
-    pub full_40: i32,
-    pub empty_40: i32,
+    pub full_20: i8,
+    pub empty_20: i8,
+    pub full_40: i8,
+    pub empty_40: i8,
 }
 
 ///100*0.45$
