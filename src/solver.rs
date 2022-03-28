@@ -47,7 +47,7 @@ mod solver_data {
             match &current_state.previous_state {
                 Option::Some(previous_state) => {
                     let mut path;
-                    if previous_state.was_depot_loaded() {
+                    if current_state.was_depot_loaded() {
                         //calculate how many containers were exchanged
                         let diff_empty_20 = current_state.container_data.empty_20
                             - previous_state.container_data.empty_20;
