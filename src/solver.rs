@@ -310,7 +310,7 @@ mod solver_data {
             new_path: bool,
         ) -> Option<PathOption> {
             let from = self.get_current_node();
-            let total_distance = config.get_distance_between(from, to);
+            let total_distance = self.total_distance + config.get_distance_between(from, to);
             let fuel_needed = config.fuel_needed_for_route(from, to);
             if fuel_needed > self.fuel_level {
                 return None;
@@ -788,9 +788,10 @@ mod solver_data {
                 //or whether there is not comparable one yet
                 let mut found_comparable_one = false;
                 for i in 0..path_options.len() {
-                    if unpacked_option.comparable_to(&path_options[i]) {
+                    let comp_option = &path_options[i];
+                    if unpacked_option.comparable_to(comp_option) {
                         found_comparable_one = true;
-                        if unpacked_option.partly_superior_to(&path_options[i]) {
+                        if unpacked_option.partly_superior_to(comp_option) {
                             path_options.push(Rc::new(unpacked_option));
                             return true;
                         }
