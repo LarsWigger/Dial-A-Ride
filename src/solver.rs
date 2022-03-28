@@ -776,39 +776,34 @@ mod solver_data {
             };
             //to detect whether something was removed
             let original_length = path_options.len();
-            if original_length != 0 {
-                //remove the entries that are completely inferior to the new one (CAN THIS EVEN HAPPEN?)
-                path_options.retain(|option| !unpacked_option.completely_superior_to(&option));
-                if original_length != path_options.len() {
-                    //something was removed => completely superior to something => insert, done
-                    path_options.push(Rc::new(unpacked_option));
-                    return true;
-                } else {
-                    //check whether unpacked_option is at least partially superior to one of the existing ones
-                    //or whether there is not comparable one yet
-                    let mut found_comparable_one = false;
-                    for i in 0..path_options.len() {
-                        if unpacked_option.comparable_to(&path_options[i]) {
-                            found_comparable_one = true;
-                            if unpacked_option.partly_superior_to(&path_options[i]) {
-                                path_options.push(Rc::new(unpacked_option));
-                                return true;
-                            }
-                        }
-                    }
-                    if found_comparable_one {
-                        //comparable to some paths, but inferior to each of them
-                        return false;
-                    } else {
-                        //nothing comparable found, insert as this is completely new
-                        path_options.push(Rc::new(unpacked_option));
-                        return true;
-                    }
-                }
-            } else {
-                //if there are no entries already, it is a special case as nothing can be compared against the new entry, so the new entry would not be added
+
+            //remove the entries that are completely inferior to the new one (CAN THIS EVEN HAPPEN?)
+            path_options.retain(|option| !unpacked_option.completely_superior_to(&option));
+            if original_length != path_options.len() {
+                //something was removed => completely superior to something => insert, done
                 path_options.push(Rc::new(unpacked_option));
                 return true;
+            } else {
+                //check whether unpacked_option is at least partially superior to one of the existing ones
+                //or whether there is not comparable one yet
+                let mut found_comparable_one = false;
+                for i in 0..path_options.len() {
+                    if unpacked_option.comparable_to(&path_options[i]) {
+                        found_comparable_one = true;
+                        if unpacked_option.partly_superior_to(&path_options[i]) {
+                            path_options.push(Rc::new(unpacked_option));
+                            return true;
+                        }
+                    }
+                }
+                if found_comparable_one {
+                    //comparable to some paths, but inferior to each of them
+                    return false;
+                } else {
+                    //nothing comparable found, insert as this is completely new
+                    path_options.push(Rc::new(unpacked_option));
+                    return true;
+                }
             }
         }
 
