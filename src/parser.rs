@@ -95,6 +95,10 @@ pub fn parse(
     sample_number: usize,
     scenario: usize,
 ) -> Config {
+    println!(
+        "Parsing input: {} {} {} {} {} {}",
+        full_pickup, empty_pickup, empty_delivery, afs, sample_number, scenario
+    );
     //setup data needed for parsing
     let mut identifier = DataIdentifier {
         full_pickup: full_pickup,

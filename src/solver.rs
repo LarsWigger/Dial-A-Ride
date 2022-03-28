@@ -187,7 +187,6 @@ mod solver_data {
         num_compatible_combinations: usize,
     }
 
-    //possible TODO: the vectors are initialized with the maximum size even though it is not needed.
     impl AllKnownOptions {
         pub fn new() -> AllKnownOptions {
             let option_map = HashMap::new();
