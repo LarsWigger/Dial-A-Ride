@@ -623,9 +623,6 @@ mod solver_data {
             node: usize,
         ) -> Option<Rc<SearchState>> {
             assert_ne!(current_state.current_node, node);
-            if node == 8 {
-                println!("Routing from {} to {}", current_state.current_node, node);
-            }
             //TODO: calculate a more realistic size, there is a maximum number of elements that can be calculated
             let vec_capacity = 20;
             let mut path_options = Vec::with_capacity(vec_capacity);
@@ -1149,18 +1146,5 @@ fn solve_for_truck_recursive(
                 }
             };
         };
-    }
-}
-
-#[cfg(test)]
-mod routing_tests {
-    use crate::parser;
-    use crate::solver::*;
-    #[test]
-    fn route_0_to_1() {
-        let config = parser::parse(2, 2, 2, 2, 1, 2);
-        let truck = config.get_truck(0);
-        let base_state = SearchState::start_state(truck.get_fuel());
-        let next_state = SearchState::route_to_node(&config, truck, &base_state, 1);
     }
 }
