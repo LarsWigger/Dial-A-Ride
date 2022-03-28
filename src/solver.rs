@@ -328,10 +328,9 @@ mod solver_data {
                         total_time = config.get_earliest_visiting_time_at_request_node(to)
                     }
                     total_time += config.get_service_time_at_request_node(to);
+                } else if depot_service {
+                    total_time += config.get_depot_service_time();
                 }
-            }
-            if depot_service {
-                total_time += config.get_depot_service_time();
             }
             //create new path
             let mut path;
@@ -399,21 +398,26 @@ mod solver_data {
             return Option::Some(new_option);
         }
 
-        ///Returns `true` if there is no scenario where `other` would be preferred over self `self`, `false` otherwise
+        ///Returns `true` if `self` would be preferred over `other` in every scenario.
+        /// Also checks whether the two paths are comparable in the first place.
         pub fn completely_superior_to(&self, other: &PathOption) -> bool {
-            return self.partly_superior_to(other)
+            return self.comparable_to(other)
                 //check whether not worse in either regard
                 && (self.total_distance <= other.total_distance)
                 && (self.total_time <= other.total_time);
         }
 
-        ///Returns `true` if `self` might be preferable over `other` in a certain scenario. This does not indicate complete superiority, which is a harder criterium including this one
+        ///Returns `true` if `self` might be preferable over `other` in a certain scenario.
+        /// Does not check whether the two paths are comparable in the first place.
         pub fn partly_superior_to(&self, other: &PathOption) -> bool {
-            let comparable = (self.get_current_node() == other.get_current_node())
-                && (self.fuel_level == other.fuel_level);
-            let at_least_one_better = (self.total_distance < other.total_distance)
+            return (self.total_distance < other.total_distance)
                 || (self.total_time < other.total_time);
-            return comparable && at_least_one_better;
+        }
+
+        ///Returns `true` if the two `PathOption`s are comparable, meaning that they are at the same node and have the same fuel level.
+        pub fn comparable_to(&self, other: &PathOption) -> bool {
+            return (self.get_current_node() == other.get_current_node())
+                && (self.fuel_level == other.fuel_level);
         }
 
         ///Returns the node this `PathOption` is currently at.
@@ -775,13 +779,25 @@ mod solver_data {
                     return true;
                 } else {
                     //check whether unpacked_option is at least partially superior to one of the existing ones
+                    //or whether there is not comparable one yet
+                    let mut found_comparable_one = false;
                     for i in 0..path_options.len() {
-                        if unpacked_option.partly_superior_to(&path_options[i]) {
-                            path_options.push(Rc::new(unpacked_option));
-                            return true;
+                        if unpacked_option.comparable_to(&path_options[i]) {
+                            found_comparable_one = true;
+                            if unpacked_option.partly_superior_to(&path_options[i]) {
+                                path_options.push(Rc::new(unpacked_option));
+                                return true;
+                            }
                         }
                     }
-                    return false;
+                    if found_comparable_one {
+                        //comparable to some paths, but inferior to each of them
+                        return false;
+                    } else {
+                        //nothing comparable found, insert as this is completely new
+                        path_options.push(Rc::new(unpacked_option));
+                        return true;
+                    }
                 }
             } else {
                 //if there are no entries already, it is a special case as nothing can be compared against the new entry, so the new entry would not be added
