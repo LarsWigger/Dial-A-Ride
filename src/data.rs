@@ -156,7 +156,7 @@ impl Config {
         return dropoff_node - self.empty_pickup - self.full_pickup;
     }
     pub fn get_dummy_depot(&self) -> usize {
-        return self.matrix_dimension;
+        return self.matrix_dimension - 1;
     }
     pub fn get_first_full_dropoff(&self) -> usize {
         return self.full_pickup + self.empty_delivery + 1;
