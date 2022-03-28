@@ -790,19 +790,25 @@ mod solver_data {
                 //check whether unpacked_option is at least partially superior to one of the existing ones
                 //or whether there is not comparable one yet
                 let mut found_comparable_one = false;
+                let mut found_partly_inferior_one = false;
                 for i in 0..path_options.len() {
                     let comp_option = &path_options[i];
                     if unpacked_option.comparable_to(comp_option) {
                         found_comparable_one = true;
                         if unpacked_option.partly_superior_to(comp_option) {
-                            path_options.push(Rc::new(unpacked_option));
-                            return true;
+                            found_partly_inferior_one = true;
+                        } else if comp_option.completely_superior_to(&unpacked_option) {
+                            return false;
                         }
                     }
                 }
                 if found_comparable_one {
-                    //comparable to some paths, but inferior to each of them
-                    return false;
+                    if found_partly_inferior_one {
+                        path_options.push(Rc::new(unpacked_option));
+                        return true;
+                    } else {
+                        return false;
+                    }
                 } else {
                     //nothing comparable found, insert as this is completely new
                     path_options.push(Rc::new(unpacked_option));
