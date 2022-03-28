@@ -108,10 +108,6 @@ pub fn parse(
     };
     let base_path = Path::new(BASE_PATH_STR).join(identifier.get_base_folder());
     parse_num_trucks_and_t_max(&mut identifier, &base_path);
-    println!(
-        "num_trucks: {}; t_max: {}",
-        identifier.num_trucks, identifier.t_max
-    );
     //parse trucks
     let truck_vec = parse_trucks(&identifier, &base_path);
     //parse matrices

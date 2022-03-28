@@ -214,7 +214,7 @@ mod solver_data {
         /// If two options are compatible (no request visited by both), they can be combined.
         /// This combination is inserted if there is either no previous one or if it has a lower `total_distance`.
         /// In order to avoid conflicts, the original map is replaced with a new one without being changed itself
-        pub fn additional_merge(&mut self, truck_options: &KnownRoutesForTruck) {
+        pub fn subsequent_merge(&mut self, truck_options: &KnownRoutesForTruck) {
             //performing this operation in place could lead to problems
             let mut new_map: HashMap<u64, CombinationOption> = HashMap::new();
             for (own_key, own_value) in &self.option_map {
@@ -247,7 +247,7 @@ mod solver_data {
                 }
             }
             println!(
-                "Performed merge. There were {} own options and {} for the truck. Now there are {} options.",
+                "Performed merge. There were {} previously known options and {} for the current truck. Now there are {} options.",
                 self.option_map.len(),
                 truck_options.map.len(),
                 new_map.len()
@@ -257,7 +257,7 @@ mod solver_data {
             let percentage_discarded =
                 (options_discarded as f64) / (options_expected as f64) * 100.;
             println!(
-                "This means that {} option combinations out of {} were discarded, about {}%",
+                "This means that {} option combinations out of {} were discarded, about {:.0}%.",
                 options_discarded, options_expected, percentage_discarded
             );
             self.option_map = new_map;
@@ -935,7 +935,6 @@ pub fn solve(config: Config) -> Solution {
     let current_truck = config.get_truck(0);
     let mut options_for_truck = solve_for_truck(&config, 0);
     options_for_truck.summarize_to_terminal();
-    return Solution {};
     all_known_options.inital_merge(&options_for_truck);
     println!("");
     for truck_index in 1..config.get_num_trucks() {
@@ -946,11 +945,11 @@ pub fn solve(config: Config) -> Solution {
             options_for_truck.summarize_to_terminal();
         } else {
             println!(
-                "Truck {} is the same as the one before, no calculation necessary.",
+                "Truck {} is identical to the one before, no calculation necessary.",
                 truck_index
             );
         }
-        all_known_options.additional_merge(&options_for_truck);
+        all_known_options.subsequent_merge(&options_for_truck);
         println!(""); //newline for better readability
     }
     return Solution {};
@@ -960,6 +959,12 @@ pub fn solve(config: Config) -> Solution {
 fn solve_for_truck(config: &Config, truck_index: usize) -> KnownRoutesForTruck {
     println!("Calculating options for truck {} ...", truck_index);
     let truck = config.get_truck(truck_index);
+    println!(
+        "Truck can load {} 20- and {} 40-foot containers, having a fuel capacity of {}.",
+        truck.get_num_20_foot_containers(),
+        truck.get_num_40_foot_containers(),
+        truck.get_fuel() / 100
+    );
     let root_state = SearchState::start_state(truck.get_fuel());
     let mut known_options = KnownRoutesForTruck::new();
     solve_for_truck_recursive(config, &truck, &mut known_options, &root_state);

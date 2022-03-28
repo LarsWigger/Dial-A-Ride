@@ -89,7 +89,7 @@ impl Config {
         requests: Vec<ContainerRequest>,
     ) -> Config {
         let matrix_dimension = (2 * full_pickup) + empty_pickup + empty_delivery + afs + 2;
-        //trucks.sort();
+        trucks.sort();
         return Config {
             full_pickup,
             empty_pickup,
