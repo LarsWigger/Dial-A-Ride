@@ -262,10 +262,6 @@ mod parser_test {
         assert_eq!(truck.get_num_20_foot_containers(), 2);
         assert_eq!(truck.get_num_40_foot_containers(), 0);
         assert_eq!(truck.get_fuel(), 28500);
-        let truck = config.get_truck(0);
-        assert_eq!(truck.get_num_20_foot_containers(), 1);
-        assert_eq!(truck.get_num_40_foot_containers(), 0);
-        assert_eq!(truck.get_fuel(), 28500);
         //times
         assert_eq!(config.get_depot_service_time(), 0);
         assert_eq!(config.get_service_time_at_request_node(1), 10);
