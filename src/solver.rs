@@ -4,6 +4,7 @@ use crate::data::Truck;
 
 mod solver_data {
     use crate::data::Config;
+    use crate::data::Solution;
     use crate::data::Truck;
     use std::collections::HashMap;
     use std::rc::Rc;
@@ -278,6 +279,26 @@ mod solver_data {
             }
             self.option_map = new_map;
             self.num_trucks_next += 1;
+        }
+
+        pub fn get_solution(&self, config: Config) -> Solution {
+            //calculate key to complete solution
+            let num_requests = config.get_first_afs() - 1;
+            let solution_key = std::u64::MAX >> (64 - num_requests);
+            let comb_option = match self.option_map.get(&solution_key) {
+                Option::None => return Solution::new(config, Vec::with_capacity(0), 0),
+                Option::Some(option) => option,
+            };
+            //solution exists, adjust format
+            let mut route_vec = Vec::with_capacity(config.get_num_trucks());
+            for route in &comb_option.routes {
+                let mut path_copy = Vec::with_capacity(route.path.len());
+                for node in &route.path {
+                    path_copy.push(*node);
+                }
+                route_vec.push(path_copy);
+            }
+            return Solution::new(config, route_vec, comb_option.total_distance);
         }
     }
 
@@ -1085,7 +1106,7 @@ pub fn solve(config: Config, verbose: bool) -> Solution {
         }
         all_known_options.subsequent_merge(&options_for_truck);
     }
-    return Solution {};
+    return all_known_options.get_solution(config);
 }
 
 ///Calculates all the known options for truck at given index

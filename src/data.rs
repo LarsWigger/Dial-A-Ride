@@ -166,4 +166,21 @@ impl Config {
     }
 }
 
-pub struct Solution {}
+pub struct Solution {
+    ///the configuration this solution is for
+    config: Config,
+    ///the routes taken by the trucks. An empty vector indicates that no solution was found
+    routes: Vec<Vec<u8>>,
+    ///the total distance of the routes taken by the trucks
+    total_distance: u32,
+}
+
+impl Solution {
+    pub fn new(config: Config, routes: Vec<Vec<u8>>, total_distance: u32) -> Solution {
+        return Solution {
+            config,
+            routes,
+            total_distance,
+        };
+    }
+}
