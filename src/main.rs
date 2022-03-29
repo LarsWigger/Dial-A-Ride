@@ -60,4 +60,9 @@ fn main() {
         verbose,
     );
     let solution = solver::solve(config, verbose);
+    if verbose {
+        //separate output from rest
+        println!("");
+    }
+    println!("{}", solution.display());
 }

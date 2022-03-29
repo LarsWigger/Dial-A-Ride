@@ -183,4 +183,38 @@ impl Solution {
             total_distance,
         };
     }
+
+    pub fn display(&self) -> String {
+        if self.routes.len() == 0 {
+            return format!("No solution found");
+        } else {
+            let mut output = String::new();
+            output += &format!(
+                "Found optimal solution with a total distance of {} using the following routes: ",
+                self.total_distance
+            );
+            for truck_index in 0..self.config.get_num_trucks() {
+                output += &self.get_route_string_for_truck(truck_index);
+            }
+            return output;
+        }
+    }
+
+    fn get_route_string_for_truck(&self, truck_index: usize) -> String {
+        let path = &self.routes[truck_index];
+
+        let truck = self.config.get_truck(truck_index);
+        let mut output = format!(
+            "\nTruck {}, ({} 20- and {} 40-foot containers with fuel capacity {}):\n{}",
+            truck_index,
+            truck.get_num_20_foot_containers(),
+            truck.get_num_40_foot_containers(),
+            truck.get_fuel() / 100,
+            0
+        );
+        for step in 1..path.len() {
+            output += &format!(" => {}", path[step]);
+        }
+        return output;
+    }
 }
