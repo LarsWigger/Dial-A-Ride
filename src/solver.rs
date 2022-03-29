@@ -8,6 +8,7 @@ mod solver_data {
     use crate::data::Truck;
     use std::collections::HashMap;
     use std::rc::Rc;
+    use std::time::{Duration, Instant};
 
     const ROUTE_DEPOT_REFUEL: usize = std::u8::MAX as usize;
     const ROUTE_DEPOT_LOAD_20: u8 = std::u8::MAX - 1;
@@ -281,12 +282,15 @@ mod solver_data {
             self.num_trucks_next += 1;
         }
 
-        pub fn get_solution(&self, config: Config) -> Solution {
+        pub fn get_solution(&self, config: Config, start_time: Instant) -> Solution {
+            let seconds_taken = start_time.elapsed().as_secs();
             //calculate key to complete solution
             let num_requests = config.get_first_afs() - 1;
             let solution_key = std::u64::MAX >> (64 - num_requests);
             let comb_option = match self.option_map.get(&solution_key) {
-                Option::None => return Solution::new(config, Vec::with_capacity(0), 0),
+                Option::None => {
+                    return Solution::new(config, Vec::with_capacity(0), 0, seconds_taken)
+                }
                 Option::Some(option) => option,
             };
             //solution exists, adjust format
@@ -298,7 +302,7 @@ mod solver_data {
                 }
                 route_vec.push(path_copy);
             }
-            return Solution::new(config, route_vec, comb_option.total_distance);
+            return Solution::new(config, route_vec, comb_option.total_distance, seconds_taken);
         }
     }
 
@@ -1088,8 +1092,10 @@ mod solver_data {
 }
 use solver_data::*;
 use std::rc::Rc;
+use std::time::Instant;
 
 pub fn solve(config: Config, verbose: bool) -> Solution {
+    let start_time = Instant::now();
     let mut all_known_options = AllKnownOptions::new(verbose);
     let mut options_for_truck = solve_for_truck(&config, 0, verbose);
     all_known_options.inital_merge(&options_for_truck);
@@ -1106,7 +1112,7 @@ pub fn solve(config: Config, verbose: bool) -> Solution {
         }
         all_known_options.subsequent_merge(&options_for_truck);
     }
-    return all_known_options.get_solution(config);
+    return all_known_options.get_solution(config, start_time);
 }
 
 ///Calculates all the known options for truck at given index

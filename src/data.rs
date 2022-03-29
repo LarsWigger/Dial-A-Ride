@@ -173,14 +173,22 @@ pub struct Solution {
     routes: Vec<Vec<u8>>,
     ///the total distance of the routes taken by the trucks
     total_distance: u32,
+    ///the time in seconds it took to calculate the result
+    seconds_taken: u64,
 }
 
 impl Solution {
-    pub fn new(config: Config, routes: Vec<Vec<u8>>, total_distance: u32) -> Solution {
+    pub fn new(
+        config: Config,
+        routes: Vec<Vec<u8>>,
+        total_distance: u32,
+        seconds_taken: u64,
+    ) -> Solution {
         return Solution {
             config,
             routes,
             total_distance,
+            seconds_taken,
         };
     }
 
@@ -190,8 +198,9 @@ impl Solution {
         } else {
             let mut output = String::new();
             output += &format!(
-                "Found optimal solution with a total distance of {} using the following routes: ",
-                self.total_distance
+                "Found optimal solution with a total distance of {} after {}s using the following routes: ",
+                self.total_distance,
+                self.seconds_taken
             );
             for truck_index in 0..self.config.get_num_trucks() {
                 output += &self.get_route_string_for_truck(truck_index);
