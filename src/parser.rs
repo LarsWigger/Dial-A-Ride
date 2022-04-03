@@ -27,7 +27,7 @@ impl DataIdentifier {
         );
     }
     fn get_data_type(&self) -> &str {
-        if self.full_pickup > self.empty_delivery {
+        if 2 * self.full_pickup > self.empty_delivery + self.empty_pickup {
             return "A";
         } else {
             return "B";
@@ -171,6 +171,7 @@ fn parse_requests(identifier: &DataIdentifier, base_path: &Path) -> Vec<Containe
 
 fn parse_num_trucks_and_t_max(identifier: &mut DataIdentifier, base_path: &Path) {
     let path = base_path.join(identifier.get_base_file_name());
+    println!("{}", path.display());
     let file_string = fs::read_to_string(path).unwrap();
     let mut lines = file_string.lines();
     //remove header and the lines before the intended one
