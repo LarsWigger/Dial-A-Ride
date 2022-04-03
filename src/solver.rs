@@ -5,6 +5,7 @@ use crate::data::Truck;
 mod solver_data {
     use crate::data::*;
     use std::collections::HashMap;
+    use std::path;
     use std::rc::Rc;
     use std::time::Instant;
 
@@ -291,6 +292,11 @@ mod solver_data {
                 let mut path_copy = Vec::with_capacity(route.path.len());
                 for node in &route.path {
                     path_copy.push(*node);
+                }
+                //internally, the dummy depot is not used, fix that here
+                let path_len = path_copy.len();
+                if path_len > 1 {
+                    path_copy[path_len - 1] = config.get_dummy_depot() as u8;
                 }
                 route_vec.push(path_copy);
             }
