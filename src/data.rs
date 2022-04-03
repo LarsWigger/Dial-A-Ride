@@ -166,6 +166,17 @@ impl Config {
     }
 }
 
+///In a route, this constant represents refueling at the depot
+pub const ROUTE_DEPOT_REFUEL: usize = std::u8::MAX as usize;
+///In a route, this constant represents loading a single empty 20-foot container at the depot
+pub const ROUTE_DEPOT_LOAD_20: u8 = std::u8::MAX - 1;
+///In a route, this constant represents deloading a single empty 20-foot container at the depot
+pub const ROUTE_DEPOT_DELOAD_20: u8 = std::u8::MAX - 2;
+///In a route, this constant represents loading a single empty 40-foot container at the depot
+pub const ROUTE_DEPOT_LOAD_40: u8 = std::u8::MAX - 3;
+///In a route, this constant represents deloading a single empty 40-foot container at the depot
+pub const ROUTE_DEPOT_DELOAD_40: u8 = std::u8::MAX - 4;
+
 pub struct Solution {
     ///the configuration this solution is for
     config: Config,

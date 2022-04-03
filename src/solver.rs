@@ -3,18 +3,10 @@ use crate::data::Solution;
 use crate::data::Truck;
 
 mod solver_data {
-    use crate::data::Config;
-    use crate::data::Solution;
-    use crate::data::Truck;
+    use crate::data::*;
     use std::collections::HashMap;
     use std::rc::Rc;
-    use std::time::{Duration, Instant};
-
-    const ROUTE_DEPOT_REFUEL: usize = std::u8::MAX as usize;
-    const ROUTE_DEPOT_LOAD_20: u8 = std::u8::MAX - 1;
-    const ROUTE_DEPOT_DELOAD_20: u8 = std::u8::MAX - 2;
-    const ROUTE_DEPOT_LOAD_40: u8 = std::u8::MAX - 3;
-    const ROUTE_DEPOT_DELOAD_40: u8 = std::u8::MAX - 4;
+    use std::time::Instant;
 
     ///Represents the route a single truck could take.
     pub struct Route {
