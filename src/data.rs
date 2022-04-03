@@ -233,7 +233,22 @@ impl Solution {
             0
         );
         for step in 1..path.len() {
-            output += &format!(" => {}", path[step]);
+            let this_node = path[step];
+            //handle special nodes
+            if this_node == (ROUTE_DEPOT_REFUEL as u8) {
+                output += " => REFUEL";
+            } else if this_node == ROUTE_DEPOT_LOAD_20 {
+                output += " => LOAD 20";
+            } else if this_node == ROUTE_DEPOT_DELOAD_20 {
+                output += " => DELOAD 20";
+            } else if this_node == ROUTE_DEPOT_LOAD_40 {
+                output += " => LOAD 40";
+            } else if this_node == ROUTE_DEPOT_DELOAD_40 {
+                output += " => DELOAD 40";
+            } else {
+                //just a normal node
+                output += &format!(" => {}", this_node);
+            }
         }
         return output;
     }
