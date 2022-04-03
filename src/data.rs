@@ -152,14 +152,20 @@ impl Config {
         return 2 * self.full_pickup + self.empty_pickup + self.empty_delivery + 1;
     }
     pub fn get_pick_node_for_full_dropoff(&self, dropoff_node: usize) -> usize {
-        assert!(self.empty_pickup + self.full_pickup < dropoff_node);
+        assert!(
+            self.empty_pickup + self.full_pickup < dropoff_node,
+            "EMPTY {}: FULL: {} DO: {}",
+            self.empty_pickup,
+            self.full_pickup,
+            dropoff_node
+        );
         return dropoff_node - self.empty_pickup - self.full_pickup;
     }
     pub fn get_dummy_depot(&self) -> usize {
         return self.matrix_dimension - 1;
     }
     pub fn get_first_full_dropoff(&self) -> usize {
-        return self.full_pickup + self.empty_delivery + 1;
+        return self.full_pickup + self.empty_pickup + 1;
     }
     pub fn get_first_empty_dropoff(&self) -> usize {
         return self.get_first_full_dropoff() + self.full_pickup;
