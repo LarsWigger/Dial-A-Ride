@@ -611,6 +611,8 @@ mod solver_data {
                 self.container_data.empty_40 += request.empty_40;
                 self.container_data.num_20 += request.empty_20;
                 self.container_data.num_40 += request.empty_40;
+                assert!(self.container_data.empty_20 >= 0);
+                assert!(self.container_data.empty_40 >= 0);
             } else if self.current_node < config.get_first_full_dropoff() + config.get_full_pickup()
             {
                 //full delivery
@@ -632,6 +634,8 @@ mod solver_data {
                 self.container_data.empty_40 += request.empty_40;
                 self.container_data.num_20 += request.empty_20;
                 self.container_data.num_40 += request.empty_40;
+                assert!(self.container_data.empty_20 >= 0);
+                assert!(self.container_data.empty_40 >= 0);
             }
             self.set_request_visited(self.current_node);
         }
@@ -894,6 +898,10 @@ mod solver_data {
         ) -> bool {
             assert!(self.container_data.num_20 <= truck.get_num_20_foot_containers());
             assert!(self.container_data.num_40 <= truck.get_num_40_foot_containers());
+            assert!(self.container_data.empty_20 <= truck.get_num_20_foot_containers());
+            assert!(self.container_data.empty_40 <= truck.get_num_40_foot_containers());
+            assert!(self.container_data.empty_20 >= 0);
+            assert!(self.container_data.empty_40 >= 0);
             //cannot visit the same request twice
             if self.get_request_visited(request_node) {
                 return false;
@@ -903,20 +911,15 @@ mod solver_data {
             if request_node < config.get_first_full_dropoff() {
                 //pickup request
                 let newly_loaded_20 = request.empty_20 + request.full_20;
-                if newly_loaded_20 > 0 {
-                    if (newly_loaded_20 + self.container_data.num_20)
-                        > truck.get_num_20_foot_containers()
-                    {
-                        return false;
-                    }
+                let num_20_after_loading =
+                    request.empty_20 + request.full_20 + self.container_data.num_20;
+                if num_20_after_loading > truck.get_num_20_foot_containers() {
+                    return false;
                 }
                 let newly_loaded_40 = request.empty_40 + request.full_40;
-                if newly_loaded_40 > 0 {
-                    if newly_loaded_40 + self.container_data.num_40
-                        > truck.get_num_40_foot_containers()
-                    {
-                        return false;
-                    }
+                let num_40_after_loading = newly_loaded_40 + self.container_data.num_40;
+                if num_40_after_loading > truck.get_num_40_foot_containers() {
+                    return false;
                 }
                 assert!(newly_loaded_20 + newly_loaded_40 > 0);
             } else {
@@ -1014,6 +1017,8 @@ mod solver_data {
             new_state.container_data.empty_40 += change_40;
             new_state.container_data.num_20 += change_20;
             new_state.container_data.num_40 += change_40;
+            assert!(new_state.container_data.empty_20 >= 0);
+            assert!(new_state.container_data.empty_40 >= 0);
             return Rc::new(new_state);
         }
 
