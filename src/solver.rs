@@ -999,7 +999,6 @@ mod solver_data {
         ///Creates the next state after `current_state` where nothing has been changed except hat `change_20` empty 20-foot containers (can be negative) have been loaded.
         /// Same for `change_40`. `path_options` is empty because a) there is nothing for it anyway and b) this indicates that something was loaded in this state
         pub fn load_at_depot(
-            config: &Config,
             current_state: &Rc<SearchState>,
             change_20: i8,
             change_40: i8,
@@ -1170,7 +1169,7 @@ fn solve_for_truck_recursive(
                 ) {
                     //create new state where the loading has been applied. Due to the above condition, no loading will happen immadiately afterwards
                     let loaded_state =
-                        SearchState::load_at_depot(config, &current_state, *change_20, *change_40);
+                        SearchState::load_at_depot(&current_state, *change_20, *change_40);
                     solve_for_truck_recursive(config, truck, known_options, &loaded_state)
                 }
             }
