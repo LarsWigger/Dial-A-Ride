@@ -988,6 +988,8 @@ mod solver_data {
             let new_empty_40 = self.container_data.empty_40 + change_40;
             if (new_empty_20 > containers_needed.empty_20_delivery)
                 || (new_empty_40 > containers_needed.empty_40_delivery)
+                || (new_empty_20 < 0)
+                || (new_empty_40 < 0)
             {
                 return false;
             }
