@@ -1151,8 +1151,7 @@ fn solve_for_truck_recursive(
     assert!(current_state.get_current_node() != config.get_dummy_depot());
     //depot, handled first because if it cannot be reached the rest is pointless anyway
     if current_state.get_current_node() == 0 {
-        //loading at the depot is always done in a separate state after navigating to the depot. This prevents repeated identical routing and makes parsing the route easier
-        //only do this when the depot has not been loaded in the current_state already, otherwise infinite branching would result
+        //should be reached only at the start (where depot loading is applied) and after depot loading (where it is only treated as possible complete route)
         apply_depot_actions(config, truck, known_options, current_state);
     } else if current_state.can_anything_be_done_at_depot(config, truck) {
         //not already at depot, try routing to it only if something can be done there, namely container (un-)loading or ending the route
@@ -1186,6 +1185,8 @@ fn apply_depot_actions(
 ) {
     assert_eq!(current_state.get_current_node(), 0);
     known_options.possibly_add(&current_state);
+    //loading at the depot is always done in a separate state after navigating to the depot. This prevents repeated identical routing and makes parsing the route easier
+    //only do this when the depot has not been loaded in the current_state already, otherwise infinite branching would result
     if !current_state.was_depot_loaded() {
         //calculate only once
         let containers_needed = current_state.get_containers_still_needed(config);
