@@ -1149,37 +1149,18 @@ fn solve_for_truck_recursive(
 ) {
     //dummy depot is never routed to internally, there is no reason to differentiate between it and the original depot
     assert!(current_state.get_current_node() != config.get_dummy_depot());
-    if current_state.get_current_node() == 0 {
-        known_options.possibly_add(&current_state);
-    }
     //depot, handled first because if it cannot be reached the rest is pointless anyway
     if current_state.get_current_node() == 0 {
         //loading at the depot is always done in a separate state after navigating to the depot. This prevents repeated identical routing and makes parsing the route easier
         //only do this when the depot has not been loaded in the current_state already, otherwise infinite branching would result
-        if !current_state.was_depot_loaded() {
-            //calculate only once
-            let containers_needed = current_state.get_containers_still_needed(config);
-            //some combinations are always nonsense, so these are not included in the predefined array
-            for (change_20, change_40) in POSSIBLE_DEPOT_LOADS {
-                if current_state.can_handle_depot_load(
-                    truck,
-                    &containers_needed,
-                    *change_20,
-                    *change_40,
-                ) {
-                    //create new state where the loading has been applied. Due to the above condition, no loading will happen immadiately afterwards
-                    let loaded_state =
-                        SearchState::load_at_depot(&current_state, *change_20, *change_40);
-                    solve_for_truck_recursive(config, truck, known_options, &loaded_state)
-                }
-            }
-        }
+        apply_depot_actions(config, truck, known_options, current_state);
     } else if current_state.can_anything_be_done_at_depot(config, truck) {
         //not already at depot, try routing to it only if something can be done there, namely container (un-)loading or ending the route
-        let possible_depot_state = SearchState::route_to_node(config, truck, &current_state, 0);
-        match possible_depot_state {
+        match SearchState::route_to_node(config, truck, &current_state, 0) {
             Option::None => return, //if the depot cannot be reached, the route cannot be ended anyway, so stop here
-            Option::Some(state) => solve_for_truck_recursive(config, truck, known_options, &state),
+            Option::Some(depot_state) => {
+                apply_depot_actions(config, truck, known_options, &depot_state)
+            }
         };
     };
     //try moving to the requests
@@ -1194,5 +1175,33 @@ fn solve_for_truck_recursive(
                 }
             };
         };
+    }
+}
+
+fn apply_depot_actions(
+    config: &Config,
+    truck: &Truck,
+    known_options: &mut KnownRoutesForTruck,
+    current_state: &Rc<SearchState>,
+) {
+    assert_eq!(current_state.get_current_node(), 0);
+    known_options.possibly_add(&current_state);
+    if !current_state.was_depot_loaded() {
+        //calculate only once
+        let containers_needed = current_state.get_containers_still_needed(config);
+        //some combinations are always nonsense, so these are not included in the predefined array
+        for (change_20, change_40) in POSSIBLE_DEPOT_LOADS {
+            if current_state.can_handle_depot_load(
+                truck,
+                &containers_needed,
+                *change_20,
+                *change_40,
+            ) {
+                //create new state where the loading has been applied. Due to the above condition, no loading will happen immadiately afterwards
+                let loaded_state =
+                    SearchState::load_at_depot(&current_state, *change_20, *change_40);
+                solve_for_truck_recursive(config, truck, known_options, &loaded_state);
+            }
+        }
     }
 }
