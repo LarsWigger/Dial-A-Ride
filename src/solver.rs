@@ -1140,7 +1140,7 @@ fn solve_for_truck_recursive(
         //should be reached only at the start (where depot loading is applied) and after depot loading (where it is only treated as possible complete route)
         apply_depot_actions(config, truck, known_options, current_state);
     } else {
-        //not already at depot, try routing to it only if something can be done there, namely container (un-)loading or ending the route
+        //not already at depot, try routing to it before applying the depot actions
         match SearchState::route_to_node(config, truck, &current_state, 0) {
             Option::None => return, //if the depot cannot be reached, the route cannot be ended anyway, so stop here
             Option::Some(depot_state) => {
