@@ -1022,20 +1022,6 @@ mod solver_data {
             assert!(new_state.container_data.empty_40 >= 0);
             return Rc::new(new_state);
         }
-
-        ///Checks whether there is a scenario where routing to the depot might make sense.
-        /// This is a cheap calculation (scales linearly) that might prevent branching (scales exponentially).
-        pub fn can_anything_be_done_at_depot(&self, config: &Config, truck: &Truck) -> bool {
-            let containers_needed = self.get_containers_still_needed(config);
-            for (change_20, change_40) in POSSIBLE_DEPOT_LOADS {
-                if self.can_handle_depot_load(truck, &containers_needed, *change_20, *change_40) {
-                    return true; //one possible load is enough
-                }
-            }
-            //if nothing can be loaded, can at least the route be finished here?
-            return (self.container_data.full_request_1_source == 0)
-                && (self.container_data.full_request_2_source == 0);
-        }
     }
 
     ///Combines all the data about the current state of loaded containers for a `SearchState`
@@ -1153,7 +1139,7 @@ fn solve_for_truck_recursive(
     if current_state.get_current_node() == 0 {
         //should be reached only at the start (where depot loading is applied) and after depot loading (where it is only treated as possible complete route)
         apply_depot_actions(config, truck, known_options, current_state);
-    } else if current_state.can_anything_be_done_at_depot(config, truck) {
+    } else {
         //not already at depot, try routing to it only if something can be done there, namely container (un-)loading or ending the route
         match SearchState::route_to_node(config, truck, &current_state, 0) {
             Option::None => return, //if the depot cannot be reached, the route cannot be ended anyway, so stop here
