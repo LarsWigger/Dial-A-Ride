@@ -1144,19 +1144,17 @@ fn solve_for_truck_recursive(
         match SearchState::route_to_node(config, truck, &current_state, 0) {
             Option::None => return, //if the depot cannot be reached, the route cannot be ended anyway, so stop here
             Option::Some(depot_state) => {
-                apply_depot_actions(config, truck, known_options, &depot_state)
+                apply_depot_actions(config, truck, known_options, &depot_state);
             }
         };
     };
     //try moving to the requests
     for request_node in 1..config.get_first_afs() {
         if current_state.can_handle_request(config, truck, request_node) {
-            let next_state =
-                SearchState::route_to_node(config, truck, &current_state, request_node);
-            match next_state {
-                Option::None => (),
+            match SearchState::route_to_node(config, truck, &current_state, request_node) {
+                Option::None => (), //do
                 Option::Some(state) => {
-                    solve_for_truck_recursive(config, truck, known_options, &state)
+                    solve_for_truck_recursive(config, truck, known_options, &state);
                 }
             };
         };
