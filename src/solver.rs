@@ -5,7 +5,6 @@ use crate::data::Truck;
 mod solver_data {
     use crate::data::*;
     use std::collections::HashMap;
-    use std::path;
     use std::rc::Rc;
     use std::time::Instant;
 
@@ -444,7 +443,7 @@ mod solver_data {
 
         ///Returns `true` if `self` would be preferred over `other` in every scenario.
         /// Also checks whether the two paths are comparable in the first place.
-        /// This criterium includes `partly_superior_to`.
+        /// This criterium includes `partly_superior_to`, so equivalence does not count as complete superiority.
         pub fn completely_superior_to(&self, other: &PathOption) -> bool {
             return self.comparable_to(other)
                 //at least one value must be clearly better
@@ -466,11 +465,13 @@ mod solver_data {
 
         ///Returns `true` if the two `PathOption`s are comparable, meaning that they are at the same node and have the same fuel level.
         pub fn comparable_to(&self, other: &PathOption) -> bool {
-            return (self.get_current_node() == other.get_current_node());
+            return self.get_current_node() == other.get_current_node();
         }
 
+        ///Returns whether `self` has the same summary attributes as `other` and whether the two end at the same node.
         pub fn equivalent_to(&self, other: &PathOption) -> bool {
-            return (self.fuel_level == other.fuel_level)
+            return self.comparable_to(other)
+                && (self.fuel_level == other.fuel_level)
                 && (self.total_distance == other.total_distance)
                 && (self.total_time == other.total_time);
         }
@@ -835,38 +836,18 @@ mod solver_data {
                 path_options.push(Rc::new(unpacked_option));
                 return true;
             } else {
-                //check whether unpacked_option is at least partially superior to one of the existing ones
-                //or whether there is not comparable one yet
-                let mut found_comparable_one = false;
-                let mut found_partly_inferior_one = false;
+                //check whether there is a reason against adding the new_option
                 for i in 0..path_options.len() {
                     let comp_option = &path_options[i];
-                    if unpacked_option.comparable_to(comp_option) {
-                        found_comparable_one = true;
-                        if unpacked_option.partly_superior_to(comp_option) {
-                            found_partly_inferior_one = true;
-                        } else if comp_option.completely_superior_to(&unpacked_option) {
-                            return false;
-                        } else if comp_option.equivalent_to(&unpacked_option) {
-                            //if an equivalent option is already in path_options and another option is partially inferior,
-                            //unpacked_option would be added even thoug something equivalent one is already there
-                            //this is not just inefficient, it causes an infinite loop, so this seemingly redundant case is essential
-                            return false;
-                        }
-                    }
-                }
-                if found_comparable_one {
-                    if found_partly_inferior_one {
-                        path_options.push(Rc::new(unpacked_option));
-                        return true;
-                    } else {
+                    if comp_option.completely_superior_to(&unpacked_option)
+                        || comp_option.equivalent_to(&unpacked_option)
+                    {
                         return false;
                     }
-                } else {
-                    //nothing comparable found, insert as this is completely new
-                    path_options.push(Rc::new(unpacked_option));
-                    return true;
                 }
+                //no reason against insertion found
+                path_options.push(Rc::new(unpacked_option));
+                return true;
             }
         }
 
