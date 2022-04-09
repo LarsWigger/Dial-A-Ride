@@ -231,12 +231,11 @@ impl Solution {
 
         let truck = self.config.get_truck(truck_index);
         let mut output = format!(
-            "\nTruck {}, ({} 20- and {} 40-foot containers with fuel capacity {}):\n{}",
+            "\nTruck {}, ({} 20- and {} 40-foot containers with fuel capacity {}):\n0(D)",
             truck_index,
             truck.get_num_20_foot_containers(),
             truck.get_num_40_foot_containers(),
-            truck.get_fuel() / 100,
-            0
+            truck.get_fuel() / 100
         );
         for step in 1..path.len() {
             let this_node = path[step];
@@ -253,9 +252,27 @@ impl Solution {
                 output += " => DELOAD 40";
             } else {
                 //just a normal node
-                output += &format!(" => {}", this_node);
+                output += &format!(" => {}({})", this_node, self.get_node_type(this_node));
             }
         }
         return output;
+    }
+
+    fn get_node_type(&self, node: u8) -> &str {
+        if node == 0 {
+            return "D";
+        } else if node <= self.config.get_full_pickup() as u8 {
+            return "FP";
+        } else if node < self.config.get_first_full_dropoff() as u8 {
+            return "EP";
+        } else if node < self.config.get_first_empty_dropoff() as u8 {
+            return "FD";
+        } else if node < self.config.get_first_afs() as u8 {
+            return "ED";
+        } else if node < self.config.get_dummy_depot() as u8 {
+            return "AFS";
+        } else {
+            return "D";
+        }
     }
 }
