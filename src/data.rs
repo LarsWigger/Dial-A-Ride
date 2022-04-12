@@ -261,7 +261,7 @@ impl Solution {
             }
         }
         return format!(
-            "\nTruck {}, ({} 20- and {} 40-foot containers with fuel capacity {}), with distance {}:\n{}",
+            "\nTruck {} ({} 20- and {} 40-foot containers with fuel capacity {}) with route distance {}:\n{}",
             truck_index,
             truck.get_num_20_foot_containers(),
             truck.get_num_40_foot_containers(),
