@@ -228,34 +228,47 @@ impl Solution {
 
     fn get_route_string_for_truck(&self, truck_index: usize) -> String {
         let path = &self.routes[truck_index];
-
         let truck = self.config.get_truck(truck_index);
-        let mut output = format!(
-            "\nTruck {}, ({} 20- and {} 40-foot containers with fuel capacity {}):\n0(D)",
-            truck_index,
-            truck.get_num_20_foot_containers(),
-            truck.get_num_40_foot_containers(),
-            truck.get_fuel() / 100
-        );
+        let mut current_node: u8 = 0;
+        let mut distance = 0;
+        let mut route = String::from("0(D)");
         for step in 1..path.len() {
             let this_node = path[step];
             //handle special nodes
             if this_node == (ROUTE_DEPOT_REFUEL as u8) {
-                output += " => REFUEL";
+                route += " => REFUEL";
             } else if this_node == ROUTE_DEPOT_LOAD_20 {
-                output += " => LOAD 20";
+                route += " => LOAD 20";
             } else if this_node == ROUTE_DEPOT_DELOAD_20 {
-                output += " => DELOAD 20";
+                route += " => DELOAD 20";
             } else if this_node == ROUTE_DEPOT_LOAD_40 {
-                output += " => LOAD 40";
+                route += " => LOAD 40";
             } else if this_node == ROUTE_DEPOT_DELOAD_40 {
-                output += " => DELOAD 40";
+                route += " => DELOAD 40";
             } else {
                 //just a normal node
-                output += &format!(" => {}({})", this_node, self.get_node_type(this_node));
+                let current_distance = self
+                    .config
+                    .get_distance_between(current_node as usize, this_node as usize);
+                distance += current_distance;
+                current_node = this_node;
+                route += &format!(
+                    " => {}({},{})",
+                    this_node,
+                    self.get_node_type(this_node),
+                    current_distance
+                );
             }
         }
-        return output;
+        return format!(
+            "\nTruck {}, ({} 20- and {} 40-foot containers with fuel capacity {}), with distance {}:\n{}",
+            truck_index,
+            truck.get_num_20_foot_containers(),
+            truck.get_num_40_foot_containers(),
+            truck.get_fuel() / 100,
+            distance,
+            route
+        );
     }
 
     fn get_node_type(&self, node: u8) -> &str {
