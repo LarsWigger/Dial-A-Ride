@@ -29,8 +29,8 @@ impl Truck {
 
     pub fn get_minutes_for_refueling(&self, old_fuel: u32) -> u32 {
         let fuel_needed = self.fuel - old_fuel;
-        //integer division, 11/10=1
-        let minutes_needed_at_least = fuel_needed / 10;
+        //integer division, 11/10=1. /100 to get get back i normal format, then 0.1min/l
+        let minutes_needed_at_least = fuel_needed / 1000;
         //check if something was was (likely)
         if minutes_needed_at_least * 10 == fuel_needed {
             return minutes_needed_at_least;
