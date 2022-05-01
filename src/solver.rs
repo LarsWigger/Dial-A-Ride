@@ -349,6 +349,14 @@ mod solver_data {
         ) -> Option<PathOption> {
             let from = self.get_current_node();
             assert_ne!(from, to);
+            let min_time = ((self.total_distance as f64) * 1.2) as u32;
+            assert!(
+                min_time <= self.total_time,
+                "min_time: {} total_time: {} node: {}",
+                min_time,
+                self.total_time,
+                from
+            );
             //calculate new total distance
             let additional_distance = config.get_distance_between(from, to);
             let total_distance = self.total_distance + additional_distance;
