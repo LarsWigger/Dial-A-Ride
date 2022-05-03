@@ -383,6 +383,10 @@ mod solver_data {
                     total_time += config.get_depot_service_time();
                 }
             }
+            //t_max applies to every type of node, including AFS and the depot
+            if total_time > config.get_t_max() {
+                return None;
+            }
             //create new path
             let mut path;
             if new_path {

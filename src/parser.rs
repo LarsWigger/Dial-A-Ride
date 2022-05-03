@@ -12,7 +12,7 @@ struct DataIdentifier {
     sample_number: usize,
     scenario: usize,
     num_trucks: usize,
-    t_max: usize,
+    t_max: u32,
 }
 
 impl DataIdentifier {
@@ -144,6 +144,7 @@ pub fn parse(
         earliest_visiting_times,
         latest_visiting_times,
         requests,
+        identifier.t_max,
     );
 }
 

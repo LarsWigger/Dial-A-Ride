@@ -73,6 +73,8 @@ pub struct Config {
     matrix_dimension: usize,
     ///requests
     requests: Vec<ContainerRequest>,
+    ///Tmax
+    t_max: u32,
 }
 impl Config {
     pub fn new(
@@ -88,6 +90,7 @@ impl Config {
         earliest_visiting_times: Vec<u32>,
         latest_visiting_times: Vec<u32>,
         requests: Vec<ContainerRequest>,
+        t_max: u32,
     ) -> Config {
         let matrix_dimension = (2 * full_pickup) + empty_pickup + empty_delivery + afs + 2;
         trucks.sort();
@@ -105,6 +108,7 @@ impl Config {
             latest_visiting_times,
             matrix_dimension,
             requests,
+            t_max,
         };
     }
     pub fn get_distance_between(&self, from: usize, to: usize) -> u32 {
@@ -170,6 +174,9 @@ impl Config {
     }
     pub fn get_first_empty_dropoff(&self) -> usize {
         return self.get_first_full_dropoff() + self.full_pickup;
+    }
+    pub fn get_t_max(&self) -> u32 {
+        return self.t_max;
     }
 }
 
