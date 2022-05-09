@@ -640,7 +640,7 @@ mod solver_data {
                 previous_state: Option::Some(new_state_reference),
             };
             if current_node != 0 {
-                assert!(new_state.get_request_visited(current_node));
+                assert!(!new_state.get_request_visited(current_node));
                 new_state.set_request_visited(current_node);
             }
             return Rc::new(new_state);
