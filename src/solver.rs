@@ -1095,6 +1095,7 @@ fn solve_for_truck(config: &Config, truck_index: usize, verbose: bool) -> KnownR
 
     let root_state = SearchState::start_state(truck);
     let mut known_options = KnownRoutesForTruck::new();
+    known_options.possibly_add(&root_state);
     solve_for_truck_recursive(config, &truck, &mut known_options, &root_state);
     if verbose {
         known_options.summarize_to_terminal();
@@ -1113,6 +1114,7 @@ fn solve_for_truck_recursive(
     if current_state.get_current_node() != 0 {
         //not already at depot
         let new_container_options_at_depot = current_state.get_depot_visit_options(config, truck);
+        let new_recursive_call = new_container_options_at_depot.len() != 0;
         let route_can_be_finished = !current_state.is_carrying_full_container();
         if route_can_be_finished || new_container_options_at_depot.len() > 0 {
             //routing to the depot makes sense
@@ -1125,7 +1127,12 @@ fn solve_for_truck_recursive(
             ) {
                 Option::None => (),
                 Option::Some(state) => {
-                    solve_for_truck_recursive(config, truck, known_options, &state)
+                    if route_can_be_finished {
+                        known_options.possibly_add(&state);
+                    }
+                    if new_recursive_call {
+                        solve_for_truck_recursive(config, truck, known_options, &state);
+                    }
                 }
             }
         }
