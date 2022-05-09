@@ -999,32 +999,32 @@ mod solver_data {
             truck: &Truck,
             request_node: usize,
         ) -> bool {
-            assert!(self.container_data.num_20 <= truck.get_num_20());
-            assert!(self.container_data.num_40 <= truck.get_num_40());
-            assert!(self.container_data.empty_20 <= truck.get_num_20());
-            assert!(self.container_data.empty_40 <= truck.get_num_40());
-            assert!(self.container_data.empty_20 >= 0);
-            assert!(self.container_data.empty_40 >= 0);
             //cannot visit the same request twice
             if self.get_request_visited(request_node) {
                 return false;
             }
+            //check if any of the existing container_options can be used
             let request = config.get_request_at_node(request_node);
+
             //only to need to check whether something can be picked up
             if request_node < config.get_first_full_dropoff() {
                 //pickup request
                 let newly_loaded_20 = request.empty_20 + request.full_20;
-                let num_20_after_loading =
-                    request.empty_20 + request.full_20 + self.container_data.num_20;
-                if num_20_after_loading > truck.get_num_20() {
-                    return false;
-                }
                 let newly_loaded_40 = request.empty_40 + request.full_40;
-                let num_40_after_loading = newly_loaded_40 + self.container_data.num_40;
-                if num_40_after_loading > truck.get_num_40() {
-                    return false;
-                }
                 assert!(newly_loaded_20 + newly_loaded_40 > 0);
+                for container_option in self.options {
+                    let num_20_after_loading =
+                        request.empty_20 + request.full_20 + container_option.num_20;
+                    if num_20_after_loading > truck.get_num_20() {
+                        continue;
+                    }
+                    let num_40_after_loading = newly_loaded_40 + container_option.num_40;
+                    if num_40_after_loading > truck.get_num_40() {
+                        continue;
+                    }
+                    //this one is ok
+                    return true;
+                }
             } else {
                 //dropoff
                 if request_node < config.get_first_empty_dropoff() {
@@ -1034,15 +1034,18 @@ mod solver_data {
                         .get_request_visited(config.get_pick_node_for_full_dropoff(request_node));
                 } else {
                     //empty container dropoff
-                    if -request.empty_20 > self.container_data.empty_20 {
-                        return false;
-                    }
-                    if -request.empty_40 > self.container_data.empty_40 {
-                        return false;
+                    for container_option in self.options {
+                        if -request.empty_20 > container_option.empty_20 {
+                            continue;
+                        }
+                        if -request.empty_40 > container_option.empty_40 {
+                            continue;
+                        }
+                        return true;
                     }
                 }
             }
-            return true;
+            return false;
         }
 
         ///Returns whether containers were loaded/unloaded at the depot in this state
