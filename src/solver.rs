@@ -979,9 +979,13 @@ mod solver_data {
             let mut options = Vec::with_capacity(capacity);
             for empty_20 in 0..truck.get_num_20() {
                 for empty_40 in 0..truck.get_num_40() {
-                    options.push(ContainerNumber::new(
-                        empty_20, empty_40, empty_20, empty_40, 0,
-                    ))
+                    options.push(ContainerNumber {
+                        empty_20,
+                        empty_40,
+                        num_20: empty_20,
+                        num_40: empty_40,
+                        previous_index: 0,
+                    });
                 }
             }
             return ContainerData {
@@ -1037,13 +1041,13 @@ mod solver_data {
                         //cannot load the new containers with the previous load
                         continue;
                     }
-                    options.push(ContainerNumber::new(
-                        container_number.empty_20,
-                        container_number.empty_40,
+                    options.push(ContainerNumber {
+                        empty_20: container_number.empty_20,
+                        empty_40: container_number.empty_40,
                         num_20,
                         num_40,
                         previous_index,
-                    ));
+                    });
                 }
             } else if request_node < config.get_first_full_dropoff() {
                 //empty pickup request
@@ -1059,13 +1063,13 @@ mod solver_data {
                     }
                     let empty_20 = container_number.empty_20 + request.empty_20;
                     let empty_40 = container_number.empty_40 + request.empty_40;
-                    options.push(ContainerNumber::new(
+                    options.push(ContainerNumber {
                         empty_20,
                         empty_40,
                         num_20,
                         num_40,
                         previous_index,
-                    ));
+                    });
                 }
             } else if request_node < config.get_first_full_dropoff() + config.get_full_pickup() {
                 //full delivery
@@ -1085,13 +1089,13 @@ mod solver_data {
                     let num_20 = container_number.num_20 + request.full_20;
                     let num_40 = container_number.num_40 + request.full_40;
                     //cannot lead to invalid options, the necessary containers have to be loaded
-                    options.push(ContainerNumber::new(
-                        container_number.empty_20,
-                        container_number.empty_40,
+                    options.push(ContainerNumber {
+                        empty_20: container_number.empty_20,
+                        empty_40: container_number.empty_40,
                         num_20,
                         num_40,
                         previous_index,
-                    ));
+                    });
                 }
             } else {
                 //empty delivery
@@ -1108,13 +1112,13 @@ mod solver_data {
                     }
                     let num_20 = container_number.num_20 + request.empty_20;
                     let num_40 = container_number.num_40 + request.empty_40;
-                    options.push(ContainerNumber::new(
+                    options.push(ContainerNumber {
                         empty_20,
                         empty_40,
                         num_20,
                         num_40,
                         previous_index,
-                    ));
+                    });
                 }
             }
             return ContainerData {
@@ -1140,25 +1144,6 @@ mod solver_data {
         num_40: i8,
         ///the index of the previous `ContainerNumber` option
         previous_index: usize,
-    }
-
-    impl ContainerNumber {
-        ///Creates a new `ContainerData` representing nothing currently carried
-        pub fn new(
-            empty_20: i8,
-            empty_40: i8,
-            num_20: i8,
-            num_40: i8,
-            previous_index: usize,
-        ) -> ContainerNumber {
-            return ContainerNumber {
-                empty_20,
-                empty_40,
-                num_20: empty_20,
-                num_40: empty_40,
-                previous_index: 0,
-            };
-        }
     }
 
     pub struct EmptyContainersStillNeeded {
