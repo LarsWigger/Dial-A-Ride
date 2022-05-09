@@ -6,6 +6,7 @@ mod solver_data {
     use crate::data::*;
     use std::collections::HashMap;
     use std::rc::Rc;
+    use std::thread::current;
     use std::time::Instant;
 
     ///Represents the route a single truck could take.
@@ -547,8 +548,10 @@ mod solver_data {
         current_node: usize,
         ///all the paths leading from the previous `SearchState` to `current_node`, empty path possible, indicates loading at depot
         path_options: Vec<Rc<PathOption>>,
-        ///represents the containers the truck is carrying in this state
-        container_data: ContainerData,
+        ///represents the containers the truck is carrying in this state,
+        options: Vec<ContainerNumber>,
+        full_request_1_source: usize,
+        full_request_2_source: usize,
         ///the requests that have been visited so far, binary encoding for efficiency
         requests_visisted: u64,
         ///the next state after this one, may or may not exist and may be overwritten later
@@ -568,10 +571,26 @@ mod solver_data {
                 path,
                 previous_index: 0,
             }));
+            //container loading options
+            let container_vec_capacity = (2 ^ (truck.get_num_20() + truck.get_num_40())) as usize;
+            let mut options = Vec::with_capacity(container_vec_capacity);
+            for empty_20 in 0..(truck.get_num_20() + 1) {
+                for empty_40 in 0..(truck.get_num_40() + 1) {
+                    options.push(ContainerNumber {
+                        empty_20,
+                        empty_40,
+                        num_20: empty_20,
+                        num_40: empty_40,
+                        previous_index: 0,
+                    });
+                }
+            }
             let search_state = SearchState {
                 current_node: 0,
                 path_options,
-                container_data: ContainerData::new(truck),
+                options,
+                full_request_1_source: 0,
+                full_request_2_source: 0,
                 requests_visisted: 0,
                 previous_state: Option::None,
             };
@@ -588,18 +607,159 @@ mod solver_data {
             //this function should only be called when at least one path exists
             let current_node = path_options[0].get_current_node();
             let new_state_reference = Rc::clone(&current_state);
+            let (options, full_request_1_source, full_request_2_source) =
+                current_state.next_container_data(config, truck, current_node);
             let mut new_state = SearchState {
                 current_node,
                 path_options,
-                container_data: current_state
-                    .container_data
-                    .next_data(config, truck, current_node),
+                options,
+                full_request_1_source,
+                full_request_2_source,
                 requests_visisted: current_state.requests_visisted,
                 previous_state: Option::Some(new_state_reference),
             };
             assert!(!new_state.get_request_visited(current_node));
             new_state.set_request_visited(current_node);
             return Rc::new(new_state);
+        }
+
+        ///Returns a tuple of three elements, in this order:
+        /// 1. `options`
+        /// 2. `full_request_1_source`
+        /// 3. `full_request_2_source`
+        fn next_container_data(
+            &self,
+            config: &Config,
+            truck: &Truck,
+            request_node: usize,
+        ) -> (Vec<ContainerNumber>, usize, usize) {
+            if request_node == 0 {
+                return self.handle_depot_visit(config, truck, request_node);
+            } else {
+                assert!(request_node < config.get_first_afs());
+                return self.handle_request_loading(config, truck, request_node);
+            }
+        }
+
+        fn handle_request_loading(
+            &self,
+            config: &Config,
+            truck: &Truck,
+            request_node: usize,
+        ) -> (Vec<ContainerNumber>, usize, usize) {
+            //number of options can decrease, but never increase
+            let mut options = Vec::with_capacity(self.options.len());
+            let full_request_1_source;
+            let full_request_2_source;
+            let request = config.get_request_at_node(request_node);
+            if request_node <= config.get_full_pickup() {
+                //full pickup request
+                if self.full_request_1_source == 0 {
+                    full_request_1_source = request_node;
+                    full_request_2_source = self.full_request_2_source;
+                } else if self.full_request_2_source == 0 {
+                    full_request_1_source = self.full_request_1_source;
+                    full_request_2_source = request_node;
+                } else {
+                    panic!("THIS SHOULD NOT HAPPEN!");
+                }
+                for previous_index in 0..self.options.len() {
+                    let container_number = self.options[previous_index];
+                    let num_20 = container_number.num_20 + request.full_20;
+                    let num_40 = container_number.num_40 + request.full_40;
+                    if num_20 > truck.get_num_20() || num_40 > truck.get_num_40() {
+                        //cannot load the new containers with the previous load
+                        continue;
+                    }
+                    options.push(ContainerNumber {
+                        empty_20: container_number.empty_20,
+                        empty_40: container_number.empty_40,
+                        num_20,
+                        num_40,
+                        previous_index,
+                    });
+                }
+            } else if request_node < config.get_first_full_dropoff() {
+                //empty pickup request
+                full_request_1_source = self.full_request_1_source;
+                full_request_2_source = self.full_request_2_source;
+                for previous_index in 0..self.options.len() {
+                    let container_number = self.options[previous_index];
+                    let num_20 = container_number.num_20 + request.empty_20;
+                    let num_40 = container_number.num_40 + request.empty_40;
+                    if num_20 > truck.get_num_20() || num_40 > truck.get_num_40() {
+                        //cannot load the new containers with the previous load
+                        continue;
+                    }
+                    let empty_20 = container_number.empty_20 + request.empty_20;
+                    let empty_40 = container_number.empty_40 + request.empty_40;
+                    options.push(ContainerNumber {
+                        empty_20,
+                        empty_40,
+                        num_20,
+                        num_40,
+                        previous_index,
+                    });
+                }
+            } else if request_node < config.get_first_full_dropoff() + config.get_full_pickup() {
+                //full delivery
+                let source_node = config.get_pick_node_for_full_dropoff(request_node);
+                if self.full_request_1_source == source_node {
+                    full_request_1_source = 0;
+                    full_request_2_source = self.full_request_2_source;
+                } else if self.full_request_2_source == source_node {
+                    full_request_1_source = self.full_request_1_source;
+                    full_request_2_source = 0;
+                } else {
+                    panic!("THIS SHOULD NOT HAPPEN!");
+                }
+                for previous_index in 0..self.options.len() {
+                    let container_number = self.options[previous_index];
+                    //values are negative, so this is effectively a subtraction
+                    let num_20 = container_number.num_20 + request.full_20;
+                    let num_40 = container_number.num_40 + request.full_40;
+                    //cannot lead to invalid options, the necessary containers have to be loaded
+                    options.push(ContainerNumber {
+                        empty_20: container_number.empty_20,
+                        empty_40: container_number.empty_40,
+                        num_20,
+                        num_40,
+                        previous_index,
+                    });
+                }
+            } else {
+                //empty delivery
+                full_request_1_source = self.full_request_1_source;
+                full_request_2_source = self.full_request_2_source;
+                for previous_index in 0..self.options.len() {
+                    let container_number = self.options[previous_index];
+                    //can also just add this because the values are negative
+                    let empty_20 = container_number.empty_20 + request.empty_20;
+                    let empty_40 = container_number.empty_40 + request.empty_40;
+                    if empty_20 < 0 || empty_40 < 0 {
+                        //cannot load the new containers with the previous load
+                        continue;
+                    }
+                    let num_20 = container_number.num_20 + request.empty_20;
+                    let num_40 = container_number.num_40 + request.empty_40;
+                    options.push(ContainerNumber {
+                        empty_20,
+                        empty_40,
+                        num_20,
+                        num_40,
+                        previous_index,
+                    });
+                }
+            }
+            return (options, full_request_1_source, full_request_2_source);
+        }
+
+        fn handle_depot_visit(
+            &self,
+            config: &Config,
+            truck: &Truck,
+            request_node: usize,
+        ) -> (Vec<ContainerNumber>, usize, usize) {
         }
 
         ///Returns whether the given `request` has been visited, makes the binary encoding more accessible.
@@ -966,173 +1126,8 @@ mod solver_data {
             return Rc::new(new_state);
         }
     }
-    #[derive(Clone)]
-    struct ContainerData {
-        options: Vec<ContainerNumber>,
-        full_request_1_source: usize,
-        full_request_2_source: usize,
-    }
-
-    impl ContainerData {
-        pub fn new(truck: &Truck) -> ContainerData {
-            let capacity = (2 ^ (truck.get_num_20() + truck.get_num_40())) as usize;
-            let mut options = Vec::with_capacity(capacity);
-            for empty_20 in 0..truck.get_num_20() {
-                for empty_40 in 0..truck.get_num_40() {
-                    options.push(ContainerNumber {
-                        empty_20,
-                        empty_40,
-                        num_20: empty_20,
-                        num_40: empty_40,
-                        previous_index: 0,
-                    });
-                }
-            }
-            return ContainerData {
-                options,
-                ///if a full container is loaded, its origin is saved here or in `full_request_2_source`. 0 indicates nothing saved at the moment
-                full_request_1_source: 0,
-                ///see `full_request_1_source`
-                full_request_2_source: 0,
-            };
-        }
-
-        pub fn next_data(
-            &self,
-            config: &Config,
-            truck: &Truck,
-            request_node: usize,
-        ) -> ContainerData {
-            if current_node == 0 {
-                return self.handle_depot_reset();
-            } else {
-                assert!(current_node < config.get_first_afs());
-                return self.handle_request_loading(config, truck, request_node);
-            }
-        }
-
-        fn handle_request_loading(
-            &self,
-            config: &Config,
-            truck: &Truck,
-            request_node: usize,
-        ) -> ContainerData {
-            //number of options can decrease, but never increase
-            let mut options = Vec::with_capacity(self.options.len());
-            let full_request_1_source;
-            let full_request_2_source;
-            let request = config.get_request_at_node(request_node);
-            if request_node <= config.get_full_pickup() {
-                //full pickup request
-                if self.full_request_1_source == 0 {
-                    full_request_1_source = request_node;
-                    full_request_2_source = self.full_request_2_source;
-                } else if self.full_request_2_source == 0 {
-                    full_request_1_source = self.full_request_1_source;
-                    full_request_2_source = request_node;
-                } else {
-                    panic!("THIS SHOULD NOT HAPPEN!");
-                }
-                for previous_index in 0..self.options.len() {
-                    let container_number = self.options[previous_index];
-                    let num_20 = container_number.num_20 + request.full_20;
-                    let num_40 = container_number.num_40 + request.full_40;
-                    if num_20 > truck.get_num_20() || num_40 > truck.get_num_40() {
-                        //cannot load the new containers with the previous load
-                        continue;
-                    }
-                    options.push(ContainerNumber {
-                        empty_20: container_number.empty_20,
-                        empty_40: container_number.empty_40,
-                        num_20,
-                        num_40,
-                        previous_index,
-                    });
-                }
-            } else if request_node < config.get_first_full_dropoff() {
-                //empty pickup request
-                full_request_1_source = self.full_request_1_source;
-                full_request_2_source = self.full_request_2_source;
-                for previous_index in 0..self.options.len() {
-                    let container_number = self.options[previous_index];
-                    let num_20 = container_number.num_20 + request.empty_20;
-                    let num_40 = container_number.num_40 + request.empty_40;
-                    if num_20 > truck.get_num_20() || num_40 > truck.get_num_40() {
-                        //cannot load the new containers with the previous load
-                        continue;
-                    }
-                    let empty_20 = container_number.empty_20 + request.empty_20;
-                    let empty_40 = container_number.empty_40 + request.empty_40;
-                    options.push(ContainerNumber {
-                        empty_20,
-                        empty_40,
-                        num_20,
-                        num_40,
-                        previous_index,
-                    });
-                }
-            } else if request_node < config.get_first_full_dropoff() + config.get_full_pickup() {
-                //full delivery
-                let source_node = config.get_pick_node_for_full_dropoff(request_node);
-                if self.full_request_1_source == source_node {
-                    full_request_1_source = 0;
-                    full_request_2_source = self.full_request_2_source;
-                } else if self.full_request_2_source == source_node {
-                    full_request_1_source = self.full_request_1_source;
-                    full_request_2_source = 0;
-                } else {
-                    panic!("THIS SHOULD NOT HAPPEN!");
-                }
-                for previous_index in 0..self.options.len() {
-                    let container_number = self.options[previous_index];
-                    //values are negative, so this is effectively a subtraction
-                    let num_20 = container_number.num_20 + request.full_20;
-                    let num_40 = container_number.num_40 + request.full_40;
-                    //cannot lead to invalid options, the necessary containers have to be loaded
-                    options.push(ContainerNumber {
-                        empty_20: container_number.empty_20,
-                        empty_40: container_number.empty_40,
-                        num_20,
-                        num_40,
-                        previous_index,
-                    });
-                }
-            } else {
-                //empty delivery
-                full_request_1_source = self.full_request_1_source;
-                full_request_2_source = self.full_request_2_source;
-                for previous_index in 0..self.options.len() {
-                    let container_number = self.options[previous_index];
-                    //can also just add this because the values are negative
-                    let empty_20 = container_number.empty_20 + request.empty_20;
-                    let empty_40 = container_number.empty_40 + request.empty_40;
-                    if empty_20 < 0 || empty_40 < 0 {
-                        //cannot load the new containers with the previous load
-                        continue;
-                    }
-                    let num_20 = container_number.num_20 + request.empty_20;
-                    let num_40 = container_number.num_40 + request.empty_40;
-                    options.push(ContainerNumber {
-                        empty_20,
-                        empty_40,
-                        num_20,
-                        num_40,
-                        previous_index,
-                    });
-                }
-            }
-            return ContainerData {
-                options,
-                full_request_1_source,
-                full_request_2_source,
-            };
-        }
-
-        fn handle_depot_reset(&self) -> ContainerData {}
-    }
 
     ///Combines all the data about the current state of loaded containers for a `SearchState`
-    #[derive(Copy, Clone)]
     struct ContainerNumber {
         ///number of empty 20 foot containers loaded
         empty_20: i8,
