@@ -57,7 +57,7 @@ mod solver_data {
                             current_container_option.empty_40 - previous_container_option.empty_40;
                         //path_option
                         let current_path_option =
-                            &previous_state.path_options[current_state_path_index];
+                            &current_state.path_options[current_state_path_index];
                         let size_at_this_step = ((diff_empty_20.abs() + diff_empty_40.abs())
                             as usize)
                             + current_path_option.path.len();
