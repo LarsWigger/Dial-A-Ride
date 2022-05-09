@@ -639,8 +639,10 @@ mod solver_data {
                 requests_visisted: current_state.requests_visisted,
                 previous_state: Option::Some(new_state_reference),
             };
-            assert!(!new_state.get_request_visited(current_node));
-            new_state.set_request_visited(current_node);
+            if current_node != 0 {
+                assert!(new_state.get_request_visited(current_node));
+                new_state.set_request_visited(current_node);
+            }
             return Rc::new(new_state);
         }
 
@@ -813,7 +815,11 @@ mod solver_data {
 
         ///Returns whether the given `request` has been visited, makes the binary encoding more accessible.
         pub fn get_request_visited(&self, request_node: usize) -> bool {
-            assert!(request_node != 0 && request_node < 64);
+            assert!(
+                request_node != 0 && request_node < 64,
+                "request_node: {}",
+                request_node
+            );
             //request binary is all 0 with 1 at the request index from the right
             let request_binary: u64 = 1 << (request_node - 1);
             let request_result = self.requests_visisted & request_binary;
