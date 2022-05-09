@@ -25,7 +25,7 @@ mod solver_data {
             path_index: usize,
             total_distance: u32,
         ) -> Route {
-            let path = Route::new_path_recursive(search_state, path_index, 0);
+            let path = Route::new_path_recursive(search_state, path_index, std::usize::MAX, 0);
             return Route {
                 path,
                 total_distance,
@@ -37,23 +37,31 @@ mod solver_data {
         fn new_path_recursive(
             current_state: &Rc<SearchState>,
             current_state_path_index: usize,
+            current_container_index: usize,
             current_size: usize,
         ) -> Vec<u8> {
             match &current_state.previous_state {
                 Option::Some(previous_state) => {
-                    let mut path;
-                    if current_state.was_depot_loaded() {
+                    if (current_container_index != std::usize::MAX
+                        && current_state.get_current_node() == 0)
+                        && current_state.container_options.len() != 0
+                    {
                         //calculate how many containers were exchanged
-                        let diff_empty_20 = current_state.container_data.empty_20
-                            - previous_state.container_data.empty_20;
-                        let diff_empty_40 = current_state.container_data.empty_40
-                            - previous_state.container_data.empty_40;
+                        let current_container_option =
+                            &current_state.container_options[current_container_index];
+                        let previous_container_option = &previous_state.container_options
+                            [current_container_option.previous_index];
+                        let diff_empty_20 =
+                            current_container_option.empty_20 - previous_container_option.empty_20;
+                        let diff_empty_40 =
+                            current_container_option.empty_40 - previous_container_option.empty_40;
                         let size_at_this_step =
                             (diff_empty_20.abs() + diff_empty_40.abs()) as usize;
                         //recursion
-                        path = Route::new_path_recursive(
+                        let mut path = Route::new_path_recursive(
                             previous_state,
                             current_state_path_index,
+                            current_container_option.previous_index,
                             current_size + size_at_this_step,
                         );
                         //loading
@@ -77,19 +85,29 @@ mod solver_data {
                             }
                         }
                         assert_eq!(path.len(), len_before + size_at_this_step);
+                        return path;
                     } else {
                         let current_path = &current_state.path_options[current_state_path_index];
                         let size_at_this_step = current_path.path.len();
-                        path = Route::new_path_recursive(
+                        let next_container_index;
+                        if current_container_index == std::usize::MAX {
+                            next_container_index = 0;
+                        } else {
+                            next_container_index = current_state.container_options
+                                [current_container_index]
+                                .previous_index;
+                        }
+                        let mut path = Route::new_path_recursive(
                             previous_state,
                             current_path.previous_index,
+                            next_container_index,
                             current_size + size_at_this_step,
                         );
                         for node in &current_path.path {
                             path.push(*node as u8);
                         }
+                        return path;
                     }
-                    return path;
                 }
                 Option::None => {
                     //the original state will always have only 1 path option: 0
@@ -126,15 +144,13 @@ mod solver_data {
         pub fn possibly_add(&mut self, search_state: &Rc<SearchState>) {
             //check whether any full containers have been picked up but not delivered
             //this could not result in any proper result anyway, so we may as well prevent it here
-            if (search_state.container_data.full_request_1_source != 0)
-                && (search_state.container_data.full_request_2_source != 0)
-            {
+            if search_state.is_carrying_full_container() {
                 return;
             }
             self.valid_insertions += 1;
             let requests_visited = search_state.requests_visisted;
             let (best_path_index, total_distance) =
-                search_state.get_path_index_and_total_distance();
+                search_state.get_best_path_index_and_total_distance();
             let previous_entry = self.map.get(&requests_visited);
             let save_or_overwrite = match previous_entry {
                 Option::None => true,
@@ -670,7 +686,7 @@ mod solver_data {
             if request_node <= config.get_full_pickup() {
                 //full pickup request
                 for previous_index in 0..self.container_options.len() {
-                    let container_number = self.container_options[previous_index];
+                    let container_number = &self.container_options[previous_index];
                     let num_20 = container_number.num_20 + request.full_20;
                     let num_40 = container_number.num_40 + request.full_40;
                     if num_20 > truck.get_num_20() || num_40 > truck.get_num_40() {
@@ -688,7 +704,7 @@ mod solver_data {
             } else if request_node < config.get_first_full_dropoff() {
                 //empty pickup request
                 for previous_index in 0..self.container_options.len() {
-                    let container_number = self.container_options[previous_index];
+                    let container_number = &self.container_options[previous_index];
                     let num_20 = container_number.num_20 + request.empty_20;
                     let num_40 = container_number.num_40 + request.empty_40;
                     if num_20 > truck.get_num_20() || num_40 > truck.get_num_40() {
@@ -708,7 +724,7 @@ mod solver_data {
             } else if request_node < config.get_first_full_dropoff() + config.get_full_pickup() {
                 //full delivery
                 for previous_index in 0..self.container_options.len() {
-                    let container_number = self.container_options[previous_index];
+                    let container_number = &self.container_options[previous_index];
                     //values are negative, so this is effectively a subtraction
                     let num_20 = container_number.num_20 + request.full_20;
                     let num_40 = container_number.num_40 + request.full_40;
@@ -724,7 +740,7 @@ mod solver_data {
             } else {
                 //empty delivery
                 for previous_index in 0..self.container_options.len() {
-                    let container_number = self.container_options[previous_index];
+                    let container_number = &self.container_options[previous_index];
                     //can also just add this because the values are negative
                     let empty_20 = container_number.empty_20 + request.empty_20;
                     let empty_40 = container_number.empty_40 + request.empty_40;
@@ -768,7 +784,7 @@ mod solver_data {
                         //invalid loading
                         continue;
                     }
-                    for existing_option in self.container_options {
+                    for existing_option in &self.container_options {
                         //comparing these is sufficient
                         if empty_20 == existing_option.empty_20
                             || empty_40 == existing_option.empty_40
@@ -857,16 +873,8 @@ mod solver_data {
         ) {
             let initial_state;
             let depot_service;
-            if current_state.was_depot_loaded() {
-                initial_state = match &current_state.previous_state {
-                    Option::None => panic!("SHOULD NEVER HAPPEN!"),
-                    Option::Some(state) => state,
-                };
-                depot_service = true;
-            } else {
-                initial_state = current_state;
-                depot_service = false;
-            }
+            initial_state = current_state;
+            depot_service = false;
             //first step, use paths from initial_state to go directly to node or fuel stations or depot
             for (previous_index, option) in initial_state.path_options.iter().enumerate() {
                 //target node
@@ -1009,7 +1017,7 @@ mod solver_data {
         }
 
         ///Returns the index of the `PathOption` with the lowest `total_distance` as well as the `total_distance` itself
-        pub fn get_path_index_and_total_distance(&self) -> (usize, u32) {
+        pub fn get_best_path_index_and_total_distance(&self) -> (usize, u32) {
             let mut best_index = 0;
             let mut lowest_distance = std::u32::MAX;
             for (index, option) in self.path_options.iter().enumerate() {
@@ -1020,72 +1028,10 @@ mod solver_data {
             }
             return (best_index, lowest_distance);
         }
-
-        ///Returns `true` if the state can handle the request next (without visiting a different request first).
-        /// Time is not taken into account, in that case the routing would just return None
-        pub fn can_handle_request(
-            &self,
-            config: &Config,
-            truck: &Truck,
-            request_node: usize,
-        ) -> bool {
-            //cannot visit the same request twice
-            if self.get_request_visited(request_node) {
-                return false;
-            }
-            //check if any of the existing container_options can be used
-            let request = config.get_request_at_node(request_node);
-
-            //only to need to check whether something can be picked up
-            if request_node < config.get_first_full_dropoff() {
-                //pickup request
-                let newly_loaded_20 = request.empty_20 + request.full_20;
-                let newly_loaded_40 = request.empty_40 + request.full_40;
-                assert!(newly_loaded_20 + newly_loaded_40 > 0);
-                for container_option in self.container_options {
-                    let num_20_after_loading =
-                        request.empty_20 + request.full_20 + container_option.num_20;
-                    if num_20_after_loading > truck.get_num_20() {
-                        continue;
-                    }
-                    let num_40_after_loading = newly_loaded_40 + container_option.num_40;
-                    if num_40_after_loading > truck.get_num_40() {
-                        continue;
-                    }
-                    //this one is ok
-                    return true;
-                }
-            } else {
-                //dropoff
-                if request_node < config.get_first_empty_dropoff() {
-                    //full container dropoff
-                    //just check whether the corresponging pickup request was visited
-                    return self
-                        .get_request_visited(config.get_pick_node_for_full_dropoff(request_node));
-                } else {
-                    //empty container dropoff
-                    for container_option in self.container_options {
-                        if -request.empty_20 > container_option.empty_20 {
-                            continue;
-                        }
-                        if -request.empty_40 > container_option.empty_40 {
-                            continue;
-                        }
-                        return true;
-                    }
-                }
-            }
-            return false;
-        }
-
-        ///Returns whether containers were loaded/unloaded at the depot in this state
-        pub fn was_depot_loaded(&self) -> bool {
-            return self.path_options.len() == 0;
-        }
     }
 
     ///Combines all the data about the current state of loaded containers for a `SearchState`
-    struct ContainerOption {
+    pub struct ContainerOption {
         ///number of empty 20 foot containers loaded
         empty_20: i8,
         ///number of empty 40 foot containers loaded
