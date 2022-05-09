@@ -55,15 +55,23 @@ mod solver_data {
                             current_container_option.empty_20 - previous_container_option.empty_20;
                         let diff_empty_40 =
                             current_container_option.empty_40 - previous_container_option.empty_40;
-                        let size_at_this_step =
-                            (diff_empty_20.abs() + diff_empty_40.abs()) as usize;
+                        //path_option
+                        let current_path_option =
+                            &previous_state.path_options[current_state_path_index];
+                        let size_at_this_step = ((diff_empty_20.abs() + diff_empty_40.abs())
+                            as usize)
+                            + current_path_option.path.len();
                         //recursion
                         let mut path = Route::new_path_recursive(
                             previous_state,
-                            current_state_path_index,
+                            current_path_option.previous_index,
                             current_container_option.previous_index,
                             current_size + size_at_this_step,
                         );
+                        //path
+                        for node in &current_path_option.path {
+                            path.push(*node as u8);
+                        }
                         //loading
                         let len_before = path.len(); //sanity check
                         if diff_empty_20 < 0 {
