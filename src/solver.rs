@@ -634,7 +634,11 @@ mod solver_data {
             request_node: usize,
         ) -> (Vec<ContainerNumber>, usize, usize) {
             if request_node == 0 {
-                return self.handle_depot_visit(config, truck, request_node);
+                return (
+                    self.get_depot_visit_options(config, truck, request_node),
+                    self.full_request_1_source,
+                    self.full_request_2_source,
+                );
             } else {
                 assert!(request_node < config.get_first_afs());
                 return self.handle_request_loading(config, truck, request_node);
@@ -754,12 +758,44 @@ mod solver_data {
             return (options, full_request_1_source, full_request_2_source);
         }
 
-        fn handle_depot_visit(
-            &self,
-            config: &Config,
-            truck: &Truck,
-            request_node: usize,
-        ) -> (Vec<ContainerNumber>, usize, usize) {
+        ///When visiting the depot from `self`, containers can be (un-)loaded, which may lead to a new `ContainerNumber`.
+        /// But only the new once are interesting, the others are already available without visiting the depot again.
+        /// Considering these old ones as well may lead to longer paths, so only the new on
+        fn get_depot_visit_options(&self, config: &Config, truck: &Truck) -> Vec<ContainerNumber> {
+            //the number of full containers is always the same
+            let org_full_20 = self.options[0].num_20 - self.options[0].empty_20;
+            let org_full_40 = self.options[0].num_40 - self.options[0].empty_40;
+            //iterate over possible combinations of empty containers and see whether they fit next to the full ones
+            let container_vec_capacity = (2 ^ (truck.get_num_20() + truck.get_num_40())) as usize;
+            let mut options = Vec::with_capacity(container_vec_capacity);
+            for empty_20 in 0..(truck.get_num_20() + 1) {
+                for empty_40 in 0..(truck.get_num_40() + 1) {
+                    let num_20 = org_full_20 + empty_20;
+                    let num_40 = org_full_40 + empty_40;
+                    if num_20 > truck.get_num_20() || num_40 > truck.get_num_40() {
+                        //invalid loading
+                        continue;
+                    }
+                    for existing_option in self.options {
+                        //comparing these is sufficient
+                        if empty_20 == existing_option.empty_20
+                            || empty_40 == existing_option.empty_40
+                        {
+                            //loading already existed beforehand
+                            continue;
+                        }
+                    }
+                    //loading is valid and did not exist beforehand
+                    options.push(ContainerNumber {
+                        empty_20,
+                        empty_40,
+                        num_20,
+                        num_40,
+                        previous_index: 0,
+                    });
+                }
+            }
+            return options;
         }
 
         ///Returns whether the given `request` has been visited, makes the binary encoding more accessible.
