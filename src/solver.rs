@@ -68,12 +68,12 @@ mod solver_data {
                             current_container_option.previous_index,
                             current_size + size_at_this_step,
                         );
-                        //path
+                        let len_before = path.len(); //sanity check
+                                                     //path
                         for node in &current_path_option.path {
                             path.push(*node as u8);
                         }
                         //loading
-                        let len_before = path.len(); //sanity check
                         if diff_empty_20 < 0 {
                             for _ in 0..-diff_empty_20 {
                                 path.push(ROUTE_DEPOT_DELOAD_20);
@@ -92,11 +92,16 @@ mod solver_data {
                                 path.push(ROUTE_DEPOT_LOAD_40);
                             }
                         }
+                        if path.len() != len_before + size_at_this_step {
+                            println!("FOUND");
+                        }
                         assert_eq!(path.len(), len_before + size_at_this_step);
                         return path;
                     } else {
-                        let current_path = &current_state.path_options[current_state_path_index];
-                        let size_at_this_step = current_path.path.len();
+                        //not at depot, only need to consider the PathOption
+                        let current_path_option =
+                            &current_state.path_options[current_state_path_index];
+                        let size_at_this_step = current_path_option.path.len();
                         let next_container_index;
                         if current_container_index == std::usize::MAX {
                             next_container_index = 0;
@@ -107,13 +112,15 @@ mod solver_data {
                         }
                         let mut path = Route::new_path_recursive(
                             previous_state,
-                            current_path.previous_index,
+                            current_path_option.previous_index,
                             next_container_index,
                             current_size + size_at_this_step,
                         );
-                        for node in &current_path.path {
+                        let len_before = path.len(); //sanity check
+                        for node in &current_path_option.path {
                             path.push(*node as u8);
                         }
+                        assert_eq!(path.len(), len_before + size_at_this_step);
                         return path;
                     }
                 }
