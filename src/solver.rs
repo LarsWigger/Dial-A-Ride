@@ -725,7 +725,7 @@ mod solver_data {
                 //full delivery
                 //since this is also used as a check, verify whether the corresponding container was picked up beforehand
                 let source_node = config.get_pickup_node_for_full_dropoff(request_node);
-                if self.get_request_visited(source_node) {
+                if !self.get_request_visited(source_node) {
                     return container_options;
                 }
                 for previous_index in 0..self.container_options.len() {
