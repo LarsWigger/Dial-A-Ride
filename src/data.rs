@@ -15,11 +15,11 @@ impl Truck {
         };
     }
 
-    pub fn get_num_20_foot_containers(&self) -> i8 {
+    pub fn get_num_20(&self) -> i8 {
         return self.num_20_foot_containers;
     }
 
-    pub fn get_num_40_foot_containers(&self) -> i8 {
+    pub fn get_num_40(&self) -> i8 {
         return self.num_40_foot_containers;
     }
 
@@ -271,8 +271,8 @@ impl Solution {
         return format!(
             "\nTruck {} ({} 20- and {} 40-foot containers with fuel capacity {}) with route distance {}:\n{}",
             truck_index,
-            truck.get_num_20_foot_containers(),
-            truck.get_num_40_foot_containers(),
+            truck.get_num_20(),
+            truck.get_num_40(),
             truck.get_fuel() / 100,
             distance,
             route
