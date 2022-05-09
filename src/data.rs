@@ -156,7 +156,7 @@ impl Config {
     pub fn get_first_afs(&self) -> usize {
         return 2 * self.full_pickup + self.empty_pickup + self.empty_delivery + 1;
     }
-    pub fn get_pick_node_for_full_dropoff(&self, dropoff_node: usize) -> usize {
+    pub fn get_pickup_node_for_full_dropoff(&self, dropoff_node: usize) -> usize {
         assert!(
             self.empty_pickup + self.full_pickup < dropoff_node,
             "EMPTY {}: FULL: {} DO: {}",

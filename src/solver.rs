@@ -657,7 +657,7 @@ mod solver_data {
             } else if (config.get_first_full_dropoff() <= node)
                 && node < (config.get_first_empty_dropoff())
             {
-                let source_node = config.get_pick_node_for_full_dropoff(node);
+                let source_node = config.get_pickup_node_for_full_dropoff(node);
                 if self.full_request_1_source == source_node {
                     return (0, self.full_request_2_source);
                 } else if self.full_request_2_source == source_node {
@@ -723,6 +723,11 @@ mod solver_data {
                 }
             } else if request_node < config.get_first_full_dropoff() + config.get_full_pickup() {
                 //full delivery
+                //since this is also used as a check, verify whether the corresponding container was picked up beforehand
+                let source_node = config.get_pickup_node_for_full_dropoff(request_node);
+                if self.get_request_visited(source_node) {
+                    return container_options;
+                }
                 for previous_index in 0..self.container_options.len() {
                     let container_number = &self.container_options[previous_index];
                     //values are negative, so this is effectively a subtraction
