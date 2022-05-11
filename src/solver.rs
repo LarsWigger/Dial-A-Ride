@@ -808,7 +808,8 @@ mod solver_data {
             let org_full_20 = self.container_options[0].num_20 - self.container_options[0].empty_20;
             let org_full_40 = self.container_options[0].num_40 - self.container_options[0].empty_40;
             //iterate over possible combinations of empty containers and see whether they fit next to the full ones
-            let container_vec_capacity = (2 ^ (truck.get_num_20() + truck.get_num_40())) as usize;
+            let container_vec_capacity = 2
+                ^ (truck.get_num_20() + truck.get_num_40()) as usize - self.container_options.len();
             let mut options = Vec::with_capacity(container_vec_capacity);
             for empty_20 in 0..(truck.get_num_20() + 1) {
                 for empty_40 in 0..(truck.get_num_40() + 1) {
