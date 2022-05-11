@@ -126,7 +126,7 @@ mod solver_data {
             //check whether any full containers have been picked up but not delivered
             //this could not result in any proper result anyway, so we may as well prevent it here
             if (search_state.container_data.full_request_1_source != 0)
-                && (search_state.container_data.full_request_2_source != 0)
+                || (search_state.container_data.full_request_2_source != 0)
             {
                 return;
             }
