@@ -175,11 +175,6 @@ mod solver_data {
         /// - there is no other known route for `search_state.requests_visited` yet
         /// - the route in `search_state` for its `requests_visited` is better than the one already known
         pub fn possibly_add(&mut self, search_state: &Rc<SearchState>) {
-            //check whether any full containers have been picked up but not delivered
-            //this could not result in any proper result anyway, so we may as well prevent it here
-            if search_state.is_carrying_full_container() {
-                return;
-            }
             self.valid_insertions += 1;
             let requests_visited = search_state.requests_visisted;
             let (best_path_index, total_distance) =
