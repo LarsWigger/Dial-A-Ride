@@ -4,9 +4,9 @@ use crate::data::Truck;
 
 mod solver_data {
     use crate::data::*;
+    use core::num;
     use std::collections::HashMap;
     use std::rc::Rc;
-    use std::thread::current;
     use std::time::Instant;
 
     ///Represents the route a single truck could take.
@@ -125,10 +125,28 @@ mod solver_data {
                     }
                 }
                 Option::None => {
-                    //the original state will always have only 1 path option: 0
-                    let mut path = Vec::with_capacity(current_size + 1);
-                    path.push(0);
-                    return path;
+                    if current_container_index != std::usize::MAX {
+                        let starting_container_option =
+                            &current_state.container_options[current_container_index];
+                        let num_containers_loaded =
+                            starting_container_option.empty_20 + starting_container_option.empty_40;
+                        //the original state will always have only 1 path option: 0
+                        let mut path =
+                            Vec::with_capacity(current_size + 1 + (num_containers_loaded as usize));
+                        path.push(0);
+                        for _ in 0..starting_container_option.empty_20 {
+                            path.push(ROUTE_DEPOT_LOAD_20);
+                        }
+                        for _ in 0..starting_container_option.empty_40 {
+                            path.push(ROUTE_DEPOT_LOAD_40);
+                        }
+                        return path;
+                    } else {
+                        //special case to handle the initial SearchState where current_container_index is undefined upon reaching this case
+                        let mut path = Vec::with_capacity(current_size + 1);
+                        path.push(0);
+                        return path;
+                    }
                 }
             }
         }
@@ -345,9 +363,6 @@ mod solver_data {
     ///
     /// Comparisons between paths ending at different nodes are obviously pointless.
     /// The concrete path is not relevant for the comparison of different paths, these three summary values describe it completely.
-    /// There can be at most 9 different `PathOption`s connecting two nodes.
-    /// If there were one more, one of the 10 options would be completely inferior to another, reducing the number back to 9 (mathematical proof not shown here).
-    /// There can be less than 9 `PathOption`s, though.
     struct PathOption {
         ///the fuel level of the vehicle at the last node, in 0.01l to avoid floating point operations
         fuel_level: u32,
@@ -809,9 +824,9 @@ mod solver_data {
                         continue;
                     }
                     for existing_option in &self.container_options {
-                        //comparing these is sufficient
-                        if empty_20 == existing_option.empty_20
-                            && empty_40 == existing_option.empty_40
+                        //comparing these is sufficient, num_20 and num_40 are the result of combining with org_full_20
+                        if (empty_20 == existing_option.empty_20)
+                            && (empty_40 == existing_option.empty_40)
                         {
                             //loading already existed beforehand
                             continue;
@@ -1112,6 +1127,7 @@ fn solve_for_truck(config: &Config, truck_index: usize, verbose: bool) -> KnownR
 
     let root_state = SearchState::start_state(truck);
     let mut known_options = KnownRoutesForTruck::new();
+    //special case, normal possibly_add() not called otherwise
     known_options.possibly_add(&root_state);
     solve_for_truck_recursive(config, &truck, &mut known_options, &root_state);
     if verbose {
@@ -1129,7 +1145,7 @@ fn solve_for_truck_recursive(
     //dummy depot is never routed to internally, there is no reason to differentiate between it and the original depot
     assert!(current_state.get_current_node() != config.get_dummy_depot());
     if current_state.get_current_node() != 0 {
-        //not already at depot
+        //not at depot, may route there if it makes sense
         let new_container_options_at_depot = current_state.get_depot_visit_options(config, truck);
         let new_recursive_call = new_container_options_at_depot.len() != 0;
         let route_can_be_finished = !current_state.is_carrying_full_container();
