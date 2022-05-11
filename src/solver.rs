@@ -687,6 +687,8 @@ mod solver_data {
             }
         }
 
+        ///If `request_node` would be visited from this `SearchState`, what would be the `container_options` of the next `SearchState`?
+        /// If there are none, it means that the request cannot be served. Also checks whether the request was already handled.
         pub fn get_container_options_at_node(
             &self,
             config: &Config,
@@ -785,8 +787,8 @@ mod solver_data {
         }
 
         ///When visiting the depot from `self`, containers can be (un-)loaded, which may lead to a new `ContainerNumber`.
-        /// But only the new once are interesting, the others are already available without visiting the depot again.
-        /// Considering these old ones as well may lead to longer paths, so only the new on
+        /// But only the new ones are interesting, the others are already available without visiting the depot again.
+        /// Considering these old ones as well may lead to longer paths, so only the new ones are added.
         pub fn get_depot_visit_options(
             &self,
             config: &Config,
@@ -809,7 +811,7 @@ mod solver_data {
                     for existing_option in &self.container_options {
                         //comparing these is sufficient
                         if empty_20 == existing_option.empty_20
-                            || empty_40 == existing_option.empty_40
+                            && empty_40 == existing_option.empty_40
                         {
                             //loading already existed beforehand
                             continue;
@@ -1154,6 +1156,7 @@ fn solve_for_truck_recursive(
     }
     //try moving to the requests
     for request_node in 1..config.get_first_afs() {
+        //calculate what container_options would exist at the next state. If there are none, the request cannot be served
         let container_options =
             current_state.get_container_options_at_node(config, truck, request_node);
         if container_options.len() != 0 {
