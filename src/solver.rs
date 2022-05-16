@@ -497,7 +497,6 @@ mod solver_data {
 
         ///Removes the elements of `path_options` that are completely inferior to `new_option`
         /// and adds `new_option` if it was partially superior to at least one of the previous elements.
-        /// Returns `true` if a change was made, `false` otherwise
         fn possibly_add_to_path_options(
             &self,
             own_index: usize,
@@ -505,9 +504,9 @@ mod solver_data {
             new_summary: Option<PathOptionSummary>,
             node: usize,
             depot_refuel: bool,
-        ) -> bool {
+        ) {
             let new_summary = match new_summary {
-                Option::None => return false,
+                Option::None => return,
                 Option::Some(x) => x,
             };
             //to detect whether something was removed
@@ -522,7 +521,6 @@ mod solver_data {
                     node,
                     depot_refuel,
                 ));
-                return true;
             } else {
                 //check whether there is a reason against adding the new_option
                 for i in 0..path_options.len() {
@@ -530,7 +528,7 @@ mod solver_data {
                     if (comp_option.get_current_node() == node)
                         && (comp_option.summary.at_least_as_good_as(&new_summary))
                     {
-                        return false;
+                        return;
                     }
                 }
                 //no reason against insertion found
@@ -540,7 +538,6 @@ mod solver_data {
                     node,
                     depot_refuel,
                 ));
-                return true;
             }
         }
 
@@ -555,12 +552,11 @@ mod solver_data {
             container_options_at_node: &Vec<ContainerOption>,
         ) {
             let loading_array = SearchState::get_container_masks(container_options_at_node);
-            for loading_distance in (0..2).rev() {
+            for loading_distance in (0..3).rev() {
                 if loading_array[loading_distance] == 0 {
                     //nothing requires this loading distance anyway, so no need to even consider this case
                     continue;
                 }
-                //target node
                 for (option_index, option) in current_state.path_options.iter().enumerate() {
                     let from = option.get_current_node();
                     //target node
@@ -1021,7 +1017,7 @@ mod solver_data {
             for index in 0..container_options_at_node.len() {
                 assert!(index < 8, "More than 8 ContainerOptions!");
                 let option = &container_options_at_node[index];
-                //key is one at the corresponding index
+                //key is 1 at the corresponding index
                 let key = 1 << index;
                 loading_array[option.last_loading_distance as usize] |= key;
             }
