@@ -348,23 +348,106 @@ mod solver_data {
         }
     }
 
-    ///Represents a single PathOption. When navigating between two nodes, stops at fuel stations might be necessary or optional.
-    /// These multiple possible paths differ in three summary values that are relevant for us:
+    ///Summarizes a `PathOption` for comparisons using these three values that are relevant:
     /// - `fuel_level`: The fuel level of the vehicle at the last node. All else being equal, higher is better as that meaens:
     ///     - less additional stops needed (or at least no difference/disadvantage)
     ///     - less time taken when refueling later and less time is always an advantage
     /// - `total_distance`: The total distance travelled by the vehicle at the last node. All else being equal, lower is always better.
     /// - `total_time`: The total time, might include waiting and fueling times. All else being equal, lower is always better. If too early, waiting is still possible
-    ///
-    /// Comparisons between paths ending at different nodes are obviously pointless.
-    /// The concrete path is not relevant for the comparison of different paths, these three summary values describe it completely.
-    struct PathOption {
+    struct PathOptionSummary {
         ///the fuel level of the vehicle at the last node, in 0.01l to avoid floating point operations
         fuel_level: u32,
         ///the total distance travelled by the vehicle at the last node
         total_distance: u32,
         ///the total
         total_time: u32,
+    }
+
+    impl PathOptionSummary {
+        pub fn partly_superior_to(&self, other: &PathOptionSummary) -> bool {
+            return (self.total_distance < other.total_distance)
+                || (self.total_time < other.total_time)
+                || (self.fuel_level > other.fuel_level);
+        }
+        pub fn at_least_as_good_as(&self, other: &PathOptionSummary) -> bool {
+            return (self.total_distance <= other.total_distance)
+                && (self.total_time <= other.total_time)
+                && (self.fuel_level >= other.fuel_level);
+        }
+        pub fn equivalent_to(&self, other: &PathOptionSummary) -> bool {
+            return (self.fuel_level == other.fuel_level)
+                && (self.total_distance == other.total_distance)
+                && (self.total_time == other.total_time);
+        }
+        //Creates a new `PathOptionSummary` that expands itself (`self`) to `to`. `config` and `previous_index`
+        /// are needed for context, `previous_index` is the index of the original `path_option` in the last `SearchState`.
+        /// Takes request service and visiting times into account as well as refueling times.
+        /// Returns `None` if there is no possible path, which may be if:
+        /// - fuel is insufficient
+        /// - arrival time is too late
+        pub fn next_summary(
+            &self,
+            config: &Config,
+            truck: &Truck,
+            from: usize,
+            to: usize,
+            depot_refuel: bool,
+        ) -> Option<PathOptionSummary> {
+            let additional_distance = config.get_distance_between(from, to);
+            //calculate fuel_level on arrival
+            let fuel_needed = config.get_fuel_needed_for_distance(additional_distance);
+            if fuel_needed > self.fuel_level {
+                //cannot reach destination, no further calculation needed
+                return Option::None;
+            }
+            let mut fuel_level = self.fuel_level - fuel_needed;
+            //calculate new total_distance
+            let total_distance = self.total_distance + additional_distance;
+            //calculate new total_time, dealing with handling and refueling times
+            let mut total_time = self.total_time + config.get_time_between(from, to);
+            //request handling times
+            if to < config.get_first_afs() {
+                //not an AFS, either depot or
+                if to != 0 {
+                    if total_time > config.get_latest_visiting_time_at_request_node(to) {
+                        //too late, impossible
+                        return Option::None;
+                    } else if total_time < config.get_earliest_visiting_time_at_request_node(to) {
+                        //too early, just wait
+                        total_time = config.get_earliest_visiting_time_at_request_node(to)
+                    }
+                    total_time += config.get_service_time_at_request_node(to);
+                } else {
+                    if depot_refuel {
+                        total_time += truck.get_minutes_for_refueling(self.fuel_level);
+                        fuel_level = truck.get_fuel();
+                    }
+                    //total_time += config.get_depot_service_time();
+                }
+            } else {
+                //AFS
+                total_time += truck.get_minutes_for_refueling(self.fuel_level);
+                fuel_level = truck.get_fuel();
+            }
+            //t_max applies to every type of node, including AFS and the depot
+            if total_time > config.get_t_max() {
+                return Option::None;
+            }
+            return Option::Some(PathOptionSummary {
+                total_distance,
+                total_time,
+                fuel_level,
+            });
+        }
+    }
+
+    ///Represents a single PathOption. When navigating between two nodes, stops at fuel stations might be necessary or optional.
+    /// The different paths can be compared solely on the values contained in `PathOptionSummary`.
+    /// Comparisons between paths ending at different nodes are obviously pointless.
+    /// The concrete path is not relevant for the comparison of different paths, these three summary values describe it completely.
+    struct PathOption {
+        ///the summary of the values, saved separately to avoid unnecessary path allocations
+        summary: PathOptionSummary,
         ///the nodes traversed in this path
         path: Vec<usize>,
         ///the index of the previous `PathOption` this one uses as a base
@@ -372,119 +455,176 @@ mod solver_data {
     }
 
     impl PathOption {
-        ///Creates a new path option that expands itself (`self`) to `to`. `config` and `previous_index`
-        /// are needed for context, `previous_index` is the index of the original `path_option` in the last `SearchState`.
-        /// Takes request service and visiting times into account as well as refueling times.
-        /// Returns `None` if there is no possible path, which may be if:
-        /// - fuel is insufficient
-        /// - arrival time is too late
-        /// If `new_path == true`, the depot service time is added to the total time.
-        /// If `new_path == true`, `self.path_options` is not copied over. This is needed when `self` is from the previous state.
-        pub fn next_path_option(
-            &self,
-            config: &Config,
-            truck: &Truck,
-            previous_index: usize,
-            to: usize,
-            depot_service: bool,
-            new_path: bool,
-        ) -> Option<PathOption> {
-            let from = self.get_current_node();
-            assert_ne!(from, to);
-            //calculate new total distance
-            let additional_distance = config.get_distance_between(from, to);
-            let total_distance = self.total_distance + additional_distance;
-            //calculate fuel level on arrival
-            let fuel_needed = config.get_fuel_needed_for_distance(additional_distance);
-            if fuel_needed > self.fuel_level {
-                return None;
-            }
-            let fuel_level = self.fuel_level - fuel_needed;
-            //calculate new total_time, dealing with handling and refueling times
-            let mut total_time = self.total_time + config.get_time_between(from, to);
-            //request handling times
-            if to < config.get_first_afs() {
-                if to != 0 {
-                    if total_time > config.get_latest_visiting_time_at_request_node(to) {
-                        //too late, impossible
-                        return None;
-                    } else if total_time < config.get_earliest_visiting_time_at_request_node(to) {
-                        //too early, just wait
-                        total_time = config.get_earliest_visiting_time_at_request_node(to)
-                    }
-                    total_time += config.get_service_time_at_request_node(to);
-                } else if depot_service {
-                    total_time += config.get_depot_service_time();
-                }
-            }
-            //t_max applies to every type of node, including AFS and the depot
-            if total_time > config.get_t_max() {
-                return None;
-            }
-            //create new path
-            let mut path;
-            if new_path {
-                path = Vec::with_capacity(1);
-            } else {
-                path = Vec::with_capacity(self.path.len() + 1);
-                for node in &self.path {
-                    path.push(*node);
-                }
-            }
-            path.push(to);
-            //create new option before possibly refueling
-            let mut new_option = PathOption {
-                fuel_level,
-                total_distance,
-                total_time,
-                path,
-                previous_index,
-            };
-            //refuel if at AFS, dummy depot should never be reached
-            assert_ne!(to, config.get_dummy_depot());
-            if config.get_first_afs() <= to {
-                new_option.refuel(truck);
-            }
-            return Some(new_option);
+        fn inferior_to(&self, other: &PathOptionSummary, node: usize) -> bool {
+            return (self.get_current_node() == node)
+                && (other.partly_superior_to(&self.summary))
+                && (other.at_least_as_good_as(&self.summary));
         }
 
-        ///If currently at the depot, this function returns the next `PathOption` where the truck has been completely refilled.
-        /// If `new_path == true`, the depot service time is added to the total time.
-        /// If `new_path == true`, `self.path_options` is not copied over. This is needed when `self` is from the previous state.
-        fn refuel_at_depot(
+        fn create_next_option(
             &self,
+            own_index: usize,
+            new_summary: PathOptionSummary,
+            node: usize,
+        ) -> Rc<PathOption> {
+            //create the new path
+            let mut path = Vec::with_capacity(self.path.len() + 1);
+            for i in 0..self.path.len() {
+                path.push(self.path[i]);
+            }
+            return Rc::new(PathOption {
+                summary: new_summary,
+                path,
+                previous_index: own_index,
+            });
+        }
+
+        ///Removes the elements of `path_options` that are completely inferior to `new_option`
+        /// and adds `new_option` if it was partially superior to at least one of the previous elements.
+        /// Returns `true` if a change was made, `false` otherwise
+        fn possibly_add_to_path_options(
+            &self,
+            own_index: usize,
+            path_options: &mut Vec<Rc<PathOption>>,
+            new_summary: Option<PathOptionSummary>,
+            node: usize,
+        ) -> bool {
+            let new_summary = match new_summary {
+                Option::None => return false,
+                Option::Some(x) => x,
+            };
+            //to detect whether something was removed
+            let original_length = path_options.len();
+            //remove the entries that are completely inferior to the new one (CAN THIS EVEN HAPPEN?)
+            path_options.retain(|option| option.inferior_to(&new_summary, node));
+            if original_length != path_options.len() {
+                //something was removed => completely superior to something => insert, done
+                path_options.push(self.create_next_option(own_index, new_summary, node));
+                return true;
+            } else {
+                //check whether there is a reason against adding the new_option
+                for i in 0..path_options.len() {
+                    let comp_option = &path_options[i];
+                    if (comp_option.get_current_node() == node)
+                        && (comp_option.summary.at_least_as_good_as(&new_summary))
+                    {
+                        return false;
+                    }
+                }
+                //no reason against insertion found
+                path_options.push(self.create_next_option(own_index, new_summary, node));
+                return true;
+            }
+        }
+
+        ///Helper function to separate code. Fills `path_options` with the ones that can be reached from the ones in `current_state`.
+        /// The paths from `current_state` are not copied as they
+        fn fill_with_path_options_from_previous_state(
             config: &Config,
             truck: &Truck,
-            previous_index: usize,
-            depot_service: bool,
-            new_path: bool,
-        ) -> Option<PathOption> {
-            //only call refuel_at_depot when already at a depot
-            assert_eq!(self.get_current_node(), 0);
-            //create new path
-            let mut path;
-            if new_path {
-                path = Vec::with_capacity(1);
-            } else {
-                path = Vec::with_capacity(self.path.len() + 1);
-                for node in &self.path {
-                    path.push(*node);
+            current_state: &Rc<SearchState>,
+            node: usize,
+            path_options: &mut Vec<Rc<PathOption>>,
+            container_options_at_node: &Vec<ContainerOption>,
+        ) {
+            let loading_array = SearchState::get_container_masks(container_options_at_node);
+            for loading_distance in (0..2).rev() {
+                if loading_array[loading_distance] == 0 {
+                    //nothing requires this loading distance anyway, so no need to even consider this case
+                    continue;
+                }
+                //target node
+                for (option_index, option) in current_state.path_options.iter().enumerate() {
+                    let from = option.get_current_node();
+                    //target node
+                    option.possibly_add_to_path_options(
+                        option_index,
+                        path_options,
+                        option
+                            .summary
+                            .next_summary(config, truck, from, node, false),
+                        node,
+                    );
+                    //fuel stations
+                    for afs in config.get_first_afs()..config.get_dummy_depot() {
+                        option.possibly_add_to_path_options(
+                            option_index,
+                            path_options,
+                            option.summary.next_summary(config, truck, from, afs, false),
+                            afs,
+                        );
+                    }
+                    //depot refueling
+                    option.possibly_add_to_path_options(
+                        option_index,
+                        path_options,
+                        option.summary.next_summary(config, truck, from, 0, true),
+                        0,
+                    );
                 }
             }
-            path.push(ROUTE_DEPOT_REFUEL);
-            //create new option before refueling
-            let mut new_option = PathOption {
-                fuel_level: self.fuel_level,
-                total_distance: self.total_distance,
-                total_time: self.total_time,
-                path,
-                previous_index,
-            };
-            new_option.refuel(truck);
-            if depot_service {
-                new_option.total_time += config.get_depot_service_time();
+        }
+
+        ///Extends the paths already in `path_options` trying to route to `node`
+        fn fill_with_following_paths(
+            config: &Config,
+            truck: &Truck,
+            node: usize,
+            path_options: &mut Vec<Rc<PathOption>>,
+        ) {
+            let mut iteration_queue = Vec::with_capacity(path_options.capacity());
+            for index in 0..path_options.len() {
+                let option = Rc::clone(&path_options[index]);
+                iteration_queue.push(option);
             }
-            return Option::Some(new_option);
+            while iteration_queue.len() != 0 {
+                let option = iteration_queue.swap_remove(0);
+                if Rc::strong_count(&option) == 1 {
+                    //this is the only remaining pointer, meaning that it was removed from path_options. No reason to continue with this element
+                    continue;
+                }
+                //save for repeated usage:
+                let current_node = option.get_current_node();
+                //going away from the target node is both forbidden and pointless
+                if current_node != node {
+                    //straight to target node
+                    option.possibly_add_to_path_options(
+                        option.previous_index,
+                        path_options,
+                        option
+                            .summary
+                            .next_summary(config, truck, current_node, node, false),
+                        node,
+                    );
+                    //refuel at a particular AFS
+                    for afs in config.get_first_afs()..config.get_dummy_depot() {
+                        //routing from itself to itself is completely pointless
+                        if current_node != afs {
+                            option.possibly_add_to_path_options(
+                                option.previous_index,
+                                path_options,
+                                option.summary.next_summary(
+                                    config,
+                                    truck,
+                                    current_node,
+                                    afs,
+                                    false,
+                                ),
+                                afs,
+                            );
+                        }
+                    }
+                    //refuel at depot
+                    option.possibly_add_to_path_options(
+                        option.previous_index,
+                        path_options,
+                        option
+                            .summary
+                            .next_summary(config, truck, current_node, 0, true),
+                        0,
+                    );
+                }
+            }
         }
 
         ///Returns `true` if `self` would be preferred over `other` in every scenario.
@@ -495,18 +635,15 @@ mod solver_data {
                 //at least one value must be clearly better
                 && self.partly_superior_to(other)
                 //check whether not worse in any regard
-                && (self.total_distance <= other.total_distance)
-                && (self.total_time <= other.total_time)
-                && (self.fuel_level >= other.fuel_level);
+                && self.summary.at_least_as_good_as(&other.summary);
         }
 
         ///Returns `true` if `self` might be preferable over `other` in a certain scenario.
         /// Does not check whether the two paths are comparable in the first place.
         /// Weaker criterium than `completely_superior_to`, included the the latter.
         pub fn partly_superior_to(&self, other: &PathOption) -> bool {
-            return (self.total_distance < other.total_distance)
-                || (self.total_time < other.total_time)
-                || (self.fuel_level > other.fuel_level);
+            //TODO: Remove
+            return self.summary.partly_superior_to(&other.summary);
         }
 
         ///Returns `true` if the two `PathOption`s are comparable, meaning that they are at the same node and have the same fuel level.
@@ -516,10 +653,7 @@ mod solver_data {
 
         ///Returns whether `self` has the same summary attributes as `other` and whether the two end at the same node.
         pub fn equivalent_to(&self, other: &PathOption) -> bool {
-            return self.comparable_to(other)
-                && (self.fuel_level == other.fuel_level)
-                && (self.total_distance == other.total_distance)
-                && (self.total_time == other.total_time);
+            return self.comparable_to(other) && self.summary.equivalent_to(&other.summary);
         }
 
         ///Returns the node this `PathOption` is currently at.
@@ -530,48 +664,6 @@ mod solver_data {
                 return 0;
             }
             return last_el;
-        }
-
-        fn refuel(&mut self, truck: &Truck) {
-            self.total_time += truck.get_minutes_for_refueling(self.fuel_level);
-            self.fuel_level = truck.get_fuel();
-        }
-
-        ///Tries to create a `PathOption` after this one where the truck is refueled at the depot.
-        /// If `depot_service == true`, the service time of the depot is added to the `total_time`
-        /// If `new_path == true`, `self.path_options` is not copied over. This is needed when `self` is from the previous state.
-        /// Returns `true` if the insertion into `path_options` was successful.
-        pub fn try_refueling_at_depot(
-            &self,
-            config: &Config,
-            truck: &Truck,
-            option_index: usize,
-            path_options: &mut Vec<Rc<PathOption>>,
-            depot_service: bool,
-            new_path: bool,
-        ) -> bool {
-            let new_option;
-            if self.get_current_node() != 0 {
-                //not already at depot, navigate to depot normally first. no reason to save this temporary one in path_options
-                let depot_option = match self.next_path_option(
-                    config,
-                    truck,
-                    option_index,
-                    0,
-                    depot_service,
-                    new_path,
-                ) {
-                    Option::None => return false, //cannot be reached, nothing more to do here
-                    Option::Some(tmp) => tmp,
-                };
-                new_option =
-                    depot_option.refuel_at_depot(config, truck, option_index, false, false);
-            } else {
-                new_option =
-                    self.refuel_at_depot(config, truck, option_index, depot_service, new_path);
-            }
-            //add option where refueled at depot, new_option was set correctly before
-            return SearchState::possibly_add_to_path_options(path_options, new_option);
         }
     }
 
@@ -602,9 +694,11 @@ mod solver_data {
             path.push(0);
             let mut path_options = Vec::with_capacity(1);
             path_options.push(Rc::new(PathOption {
-                fuel_level: truck.get_fuel(),
-                total_distance: 0,
-                total_time: 0,
+                summary: PathOptionSummary {
+                    fuel_level: truck.get_fuel(),
+                    total_distance: 0,
+                    total_time: 0,
+                },
                 path,
                 previous_index: 0,
             }));
@@ -890,15 +984,16 @@ mod solver_data {
             let vec_capacity = 20;
             let mut path_options = Vec::with_capacity(vec_capacity);
             //first step, initial filling using the PathOptions from this state
-            SearchState::fill_with_path_options_from_previous_state(
+            PathOption::fill_with_path_options_from_previous_state(
                 config,
                 truck,
                 current_state,
                 node,
                 &mut path_options,
+                &container_options_at_node,
             );
             //second step, try using previously found path_options to find a better path to somewhere (not only the depot)
-            SearchState::fill_with_following_paths(config, truck, node, &mut path_options);
+            PathOption::fill_with_following_paths(config, truck, node, &mut path_options);
             //third step, remove anything that does not end at the target node
             path_options.retain(|option| option.get_current_node() == node);
             if path_options.len() == 0 {
@@ -915,118 +1010,18 @@ mod solver_data {
             }
         }
 
-        ///Helper function to separate code. Fills `path_options` with the ones that can be reached from the ones in `current_state`.
-        /// The paths from `current_state` are not copied as they
-        fn fill_with_path_options_from_previous_state(
-            config: &Config,
-            truck: &Truck,
-            current_state: &Rc<SearchState>,
-            node: usize,
-            path_options: &mut Vec<Rc<PathOption>>,
-        ) {
-            let initial_state;
-            let depot_service;
-            initial_state = current_state;
-            depot_service = false;
-            //first step, use paths from initial_state to go directly to node or fuel stations or depot
-            for (previous_index, option) in initial_state.path_options.iter().enumerate() {
-                //target node
-                let mut new_option = option.next_path_option(
-                    config,
-                    truck,
-                    previous_index,
-                    node,
-                    depot_service,
-                    true,
-                );
-                SearchState::possibly_add_to_path_options(path_options, new_option);
-                //fuel stations
-                for afs in config.get_first_afs()..config.get_dummy_depot() {
-                    new_option = option.next_path_option(
-                        config,
-                        truck,
-                        previous_index,
-                        afs,
-                        depot_service,
-                        true,
-                    );
-                    SearchState::possibly_add_to_path_options(path_options, new_option);
-                }
-                option.try_refueling_at_depot(
-                    config,
-                    truck,
-                    previous_index,
-                    path_options,
-                    depot_service,
-                    true,
-                );
+        ///Returns `(load_0, load_1, load_2)`. Each of these encodes the following: The `n`th bit from the right is one, if the `ContainerOption`
+        /// at index `n` has a `last_loading_time` of this value (e.g. 0 for `load_0`)
+        fn get_container_masks(container_options_at_node: &Vec<ContainerOption>) -> [i32; 3] {
+            let mut loading_array = [0, 0, 0];
+            for index in 0..container_options_at_node.len() {
+                assert!(index < 8, "More than 8 ContainerOptions!");
+                let option = &container_options_at_node[index];
+                //key is one at the corresponding index
+                let key = 1 << index;
+                loading_array[option.last_loading_distance as usize] |= key;
             }
-        }
-
-        ///Extends the paths already in `path_options` trying to route to `node`
-        fn fill_with_following_paths(
-            config: &Config,
-            truck: &Truck,
-            node: usize,
-            path_options: &mut Vec<Rc<PathOption>>,
-        ) {
-            let mut improvement_found = true;
-            let mut iteration_clone = Vec::with_capacity(path_options.capacity());
-            while improvement_found {
-                improvement_found = false;
-                //iterate over efficient copy of path_options because compiler complains otherwise
-                iteration_clone.retain(|_| false);
-                for index in 0..path_options.len() {
-                    let option = Rc::clone(&path_options[index]);
-                    iteration_clone.push(option);
-                }
-                //iterate over all the options known so far and see whether they lead to a new interesting option
-                for option in iteration_clone.iter() {
-                    //save for repeated usage:
-                    let current_node = option.get_current_node();
-                    //going away from the target node is both forbidden and pointless
-                    if current_node != node {
-                        //straight to target node
-                        improvement_found |= SearchState::possibly_add_to_path_options(
-                            path_options,
-                            option.next_path_option(
-                                config,
-                                truck,
-                                option.previous_index,
-                                node,
-                                false,
-                                false,
-                            ),
-                        );
-                        //refuel at a particular AFS
-                        for afs in config.get_first_afs()..config.get_dummy_depot() {
-                            //routing from itself to itself is completely pointless
-                            if current_node != afs {
-                                improvement_found |= SearchState::possibly_add_to_path_options(
-                                    path_options,
-                                    option.next_path_option(
-                                        config,
-                                        truck,
-                                        option.previous_index,
-                                        afs,
-                                        false,
-                                        false,
-                                    ),
-                                );
-                            }
-                        }
-                        //refuel at depot
-                        improvement_found |= option.try_refueling_at_depot(
-                            config,
-                            truck,
-                            option.previous_index,
-                            path_options,
-                            false,
-                            false,
-                        );
-                    }
-                }
-            }
+            return loading_array;
         }
 
         ///Removes the elements of `path_options` that are completely inferior to `new_option`
@@ -1074,8 +1069,8 @@ mod solver_data {
             let mut best_index = 0;
             let mut lowest_distance = std::u32::MAX;
             for (index, option) in self.path_options.iter().enumerate() {
-                if option.total_distance < lowest_distance {
-                    lowest_distance = option.total_distance;
+                if option.summary.total_distance < lowest_distance {
+                    lowest_distance = option.summary.total_distance;
                     best_index = index;
                 }
             }
