@@ -4,7 +4,6 @@ use crate::data::Truck;
 
 mod solver_data {
     use crate::data::*;
-    use core::num;
     use std::collections::HashMap;
     use std::rc::Rc;
     use std::time::Instant;
@@ -364,27 +363,33 @@ mod solver_data {
     }
 
     impl PathOptionSummary {
+        ///Returns `true? if this summary is superior to the other in at least one regard.
+        /// This method may be called on another summary is not even comparable in context.
         pub fn partly_superior_to(&self, other: &PathOptionSummary) -> bool {
             return (self.total_distance < other.total_distance)
                 || (self.total_time < other.total_time)
                 || (self.fuel_level > other.fuel_level);
         }
+        ///Returns `true` if this summary is not worse than the other in any regard
         pub fn at_least_as_good_as(&self, other: &PathOptionSummary) -> bool {
             return (self.total_distance <= other.total_distance)
                 && (self.total_time <= other.total_time)
                 && (self.fuel_level >= other.fuel_level);
         }
+        ///Returns `true` if this summary is equivalent to the other
         pub fn equivalent_to(&self, other: &PathOptionSummary) -> bool {
             return (self.fuel_level == other.fuel_level)
                 && (self.total_distance == other.total_distance)
                 && (self.total_time == other.total_time);
         }
-        //Creates a new `PathOptionSummary` that expands itself (`self`) to `to`. `config` and `previous_index`
-        /// are needed for context, `previous_index` is the index of the original `path_option` in the last `SearchState`.
+        //Creates a new `PathOptionSummary` that expands itself (`self`) to `to`.
         /// Takes request service and visiting times into account as well as refueling times.
+        /// If `depot_refuel==true`, the truck is refueled when arriving at the depot.
+        /// This method may be called when the truck is already at the depot, there is no disadvantage to doing so
+        /// - since there is not travel, nothing changes except the refuel.
         /// Returns `None` if there is no possible path, which may be if:
         /// - fuel is insufficient
-        /// - arrival time is too late
+        /// - arrival time is too late (regarding either request visiting time or t_max)
         pub fn next_summary(
             &self,
             config: &Config,
@@ -455,7 +460,8 @@ mod solver_data {
     }
 
     impl PathOption {
-        fn inferior_to(&self, other: &PathOptionSummary, node: usize) -> bool {
+        ///Returns `true` if `self` is inferior to the other `PathOptionSummary` at `node`.
+        fn completely_inferior_to(&self, other: &PathOptionSummary, node: usize) -> bool {
             return (self.get_current_node() == node)
                 && (other.partly_superior_to(&self.summary))
                 && (other.at_least_as_good_as(&self.summary));
@@ -466,11 +472,21 @@ mod solver_data {
             own_index: usize,
             new_summary: PathOptionSummary,
             node: usize,
+            depot_refuel: bool,
         ) -> Rc<PathOption> {
             //create the new path
             let mut path = Vec::with_capacity(self.path.len() + 1);
             for i in 0..self.path.len() {
                 path.push(self.path[i]);
+            }
+            if depot_refuel {
+                if path[path.len() - 1] != 0 {
+                    //not already at depot, so push the depot node first
+                    path.push(0);
+                }
+                path.push(ROUTE_DEPOT_REFUEL);
+            } else {
+                path.push(node);
             }
             return Rc::new(PathOption {
                 summary: new_summary,
@@ -488,6 +504,7 @@ mod solver_data {
             path_options: &mut Vec<Rc<PathOption>>,
             new_summary: Option<PathOptionSummary>,
             node: usize,
+            depot_refuel: bool,
         ) -> bool {
             let new_summary = match new_summary {
                 Option::None => return false,
@@ -496,10 +513,15 @@ mod solver_data {
             //to detect whether something was removed
             let original_length = path_options.len();
             //remove the entries that are completely inferior to the new one (CAN THIS EVEN HAPPEN?)
-            path_options.retain(|option| option.inferior_to(&new_summary, node));
+            path_options.retain(|option| option.completely_inferior_to(&new_summary, node));
             if original_length != path_options.len() {
                 //something was removed => completely superior to something => insert, done
-                path_options.push(self.create_next_option(own_index, new_summary, node));
+                path_options.push(self.create_next_option(
+                    own_index,
+                    new_summary,
+                    node,
+                    depot_refuel,
+                ));
                 return true;
             } else {
                 //check whether there is a reason against adding the new_option
@@ -512,7 +534,12 @@ mod solver_data {
                     }
                 }
                 //no reason against insertion found
-                path_options.push(self.create_next_option(own_index, new_summary, node));
+                path_options.push(self.create_next_option(
+                    own_index,
+                    new_summary,
+                    node,
+                    depot_refuel,
+                ));
                 return true;
             }
         }
@@ -544,6 +571,7 @@ mod solver_data {
                             .summary
                             .next_summary(config, truck, from, node, false),
                         node,
+                        false,
                     );
                     //fuel stations
                     for afs in config.get_first_afs()..config.get_dummy_depot() {
@@ -552,6 +580,7 @@ mod solver_data {
                             path_options,
                             option.summary.next_summary(config, truck, from, afs, false),
                             afs,
+                            false,
                         );
                     }
                     //depot refueling
@@ -560,6 +589,7 @@ mod solver_data {
                         path_options,
                         option.summary.next_summary(config, truck, from, 0, true),
                         0,
+                        true,
                     );
                 }
             }
@@ -595,6 +625,7 @@ mod solver_data {
                             .summary
                             .next_summary(config, truck, current_node, node, false),
                         node,
+                        false,
                     );
                     //refuel at a particular AFS
                     for afs in config.get_first_afs()..config.get_dummy_depot() {
@@ -611,6 +642,7 @@ mod solver_data {
                                     false,
                                 ),
                                 afs,
+                                false,
                             );
                         }
                     }
@@ -622,6 +654,7 @@ mod solver_data {
                             .summary
                             .next_summary(config, truck, current_node, 0, true),
                         0,
+                        true,
                     );
                 }
             }
