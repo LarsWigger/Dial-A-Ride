@@ -646,7 +646,7 @@ mod solver_data {
             let current_node = path_options[0].get_current_node();
             let new_state_reference = Rc::clone(&current_state);
             let (full_request_1_source, full_request_2_source) =
-                current_state.get_container_sources_at_node(config, current_node);
+                current_state.get_container_sources_at_arrival(config, current_node);
             let mut new_state = SearchState {
                 current_node,
                 path_options,
@@ -664,7 +664,7 @@ mod solver_data {
         }
 
         ///Returns `(full_request_1_source, full_request_2_source)` as it will be upon arrival at at `node`
-        fn get_container_sources_at_node(&self, config: &Config, node: usize) -> (usize, usize) {
+        fn get_container_sources_at_arrival(&self, config: &Config, node: usize) -> (usize, usize) {
             if (0 < node) && (node <= config.get_full_pickup()) {
                 if self.full_request_1_source == 0 {
                     return (node, self.full_request_2_source);
@@ -811,23 +811,39 @@ mod solver_data {
                         //invalid loading
                         continue;
                     }
-                    for existing_option in &self.container_options {
+                    let mut previous_index = 0;
+                    let mut previous_loading_distance = 100; //impossibly high start value that gets overwritten
+                    let mut already_existing = false;
+                    for index in 0..self.container_options.len() {
+                        let existing_option = &self.container_options[index];
                         //comparing these is sufficient, num_20 and num_40 are the result of combining with org_full_20
                         if (empty_20 == existing_option.empty_20)
                             && (empty_40 == existing_option.empty_40)
                         {
                             //loading already existed beforehand
-                            continue;
+                            already_existing = true;
+                            continue; //no need to continue
+                        }
+                        //how many containers need to be changed, the existing_option with the lowest value should be preferred
+                        //all else being equal, loading container earlier is always better as the time taken may disappear in an earliest_visiting_time
+                        //there is never an advantage to loading a container later that could have been loaded earlier
+                        let loading_distance = (empty_20 - existing_option.empty_20).abs()
+                            + (empty_40 - existing_option.empty_40).abs();
+                        if loading_distance < previous_loading_distance {
+                            previous_loading_distance = loading_distance;
+                            previous_index = index;
                         }
                     }
                     //loading is valid and did not exist beforehand
-                    options.push(ContainerOption {
-                        empty_20,
-                        empty_40,
-                        num_20,
-                        num_40,
-                        previous_index: 0,
-                    });
+                    if !already_existing {
+                        options.push(ContainerOption {
+                            empty_20,
+                            empty_40,
+                            num_20,
+                            num_40,
+                            previous_index,
+                        });
+                    }
                 }
             }
             return options;
