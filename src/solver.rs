@@ -473,14 +473,23 @@ mod solver_data {
             new_summary: PathOptionSummary,
             node: usize,
             depot_refuel: bool,
+            new_path: bool,
         ) -> Rc<PathOption> {
             //create the new path
             let mut path = Vec::with_capacity(self.path.len() + 1);
-            for i in 0..self.path.len() {
-                path.push(self.path[i]);
-            }
+            let last_node;
+            if new_path {
+                //there are no elements already in the path, so take the one from self
+                last_node = self.get_current_node();
+            } else {
+                //copy the previous path and save for later
+                for i in 0..self.path.len() {
+                    path.push(self.path[i]);
+                }
+                last_node = path[path.len() - 1]
+            };
             if depot_refuel {
-                if path[path.len() - 1] != 0 {
+                if last_node != 0 {
                     //not already at depot, so push the depot node first
                     path.push(0);
                 }
@@ -504,6 +513,7 @@ mod solver_data {
             new_summary: Option<PathOptionSummary>,
             node: usize,
             depot_refuel: bool,
+            new_path: bool,
         ) {
             let new_summary = match new_summary {
                 Option::None => return,
@@ -512,7 +522,7 @@ mod solver_data {
             //to detect whether something was removed
             let original_length = path_options.len();
             //remove the entries that are completely inferior to the new one (CAN THIS EVEN HAPPEN?)
-            path_options.retain(|option| option.completely_inferior_to(&new_summary, node));
+            path_options.retain(|option| !option.completely_inferior_to(&new_summary, node));
             if original_length != path_options.len() {
                 //something was removed => completely superior to something => insert, done
                 path_options.push(self.create_next_option(
@@ -520,6 +530,7 @@ mod solver_data {
                     new_summary,
                     node,
                     depot_refuel,
+                    new_path,
                 ));
             } else {
                 //check whether there is a reason against adding the new_option
@@ -537,6 +548,7 @@ mod solver_data {
                     new_summary,
                     node,
                     depot_refuel,
+                    new_path,
                 ));
             }
         }
@@ -568,6 +580,7 @@ mod solver_data {
                             .next_summary(config, truck, from, node, false),
                         node,
                         false,
+                        true,
                     );
                     //fuel stations
                     for afs in config.get_first_afs()..config.get_dummy_depot() {
@@ -577,6 +590,7 @@ mod solver_data {
                             option.summary.next_summary(config, truck, from, afs, false),
                             afs,
                             false,
+                            true,
                         );
                     }
                     //depot refueling
@@ -585,6 +599,7 @@ mod solver_data {
                         path_options,
                         option.summary.next_summary(config, truck, from, 0, true),
                         0,
+                        true,
                         true,
                     );
                 }
@@ -622,6 +637,7 @@ mod solver_data {
                             .next_summary(config, truck, current_node, node, false),
                         node,
                         false,
+                        false,
                     );
                     //refuel at a particular AFS
                     for afs in config.get_first_afs()..config.get_dummy_depot() {
@@ -639,6 +655,7 @@ mod solver_data {
                                 ),
                                 afs,
                                 false,
+                                false,
                             );
                         }
                     }
@@ -651,6 +668,7 @@ mod solver_data {
                             .next_summary(config, truck, current_node, 0, true),
                         0,
                         true,
+                        false,
                     );
                 }
             }
