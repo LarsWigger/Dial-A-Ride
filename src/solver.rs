@@ -619,6 +619,7 @@ mod solver_data {
                         num_20: empty_20,
                         num_40: empty_40,
                         previous_index: 0,
+                        last_loading_distance: empty_20 + empty_40,
                     });
                 }
             }
@@ -720,6 +721,7 @@ mod solver_data {
                         num_20,
                         num_40,
                         previous_index,
+                        last_loading_distance: container_number.last_loading_distance,
                     });
                 }
             } else if request_node < config.get_first_full_dropoff() {
@@ -740,6 +742,7 @@ mod solver_data {
                         num_20,
                         num_40,
                         previous_index,
+                        last_loading_distance: container_number.last_loading_distance,
                     });
                 }
             } else if request_node < config.get_first_full_dropoff() + config.get_full_pickup() {
@@ -761,6 +764,7 @@ mod solver_data {
                         num_20,
                         num_40,
                         previous_index,
+                        last_loading_distance: container_number.last_loading_distance,
                     });
                 }
             } else {
@@ -782,6 +786,7 @@ mod solver_data {
                         num_20,
                         num_40,
                         previous_index,
+                        last_loading_distance: container_number.last_loading_distance,
                     });
                 }
             }
@@ -842,6 +847,7 @@ mod solver_data {
                             num_20,
                             num_40,
                             previous_index,
+                            last_loading_distance: previous_loading_distance,
                         });
                     }
                 }
@@ -1089,6 +1095,8 @@ mod solver_data {
         num_40: i8,
         ///the index of the previous `ContainerNumber` option
         previous_index: usize,
+        ///the number of containers that were unloaded the last time the depot was visited. May be 0,1 or 2, no other values possible
+        last_loading_distance: i8,
     }
 }
 use solver_data::*;
