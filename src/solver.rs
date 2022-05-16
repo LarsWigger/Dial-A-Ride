@@ -627,35 +627,6 @@ mod solver_data {
             }
         }
 
-        ///Returns `true` if `self` would be preferred over `other` in every scenario.
-        /// Also checks whether the two paths are comparable in the first place.
-        /// This criterium includes `partly_superior_to`, so equivalence does not count as complete superiority.
-        pub fn completely_superior_to(&self, other: &PathOption) -> bool {
-            return self.comparable_to(other)
-                //at least one value must be clearly better
-                && self.partly_superior_to(other)
-                //check whether not worse in any regard
-                && self.summary.at_least_as_good_as(&other.summary);
-        }
-
-        ///Returns `true` if `self` might be preferable over `other` in a certain scenario.
-        /// Does not check whether the two paths are comparable in the first place.
-        /// Weaker criterium than `completely_superior_to`, included the the latter.
-        pub fn partly_superior_to(&self, other: &PathOption) -> bool {
-            //TODO: Remove
-            return self.summary.partly_superior_to(&other.summary);
-        }
-
-        ///Returns `true` if the two `PathOption`s are comparable, meaning that they are at the same node and have the same fuel level.
-        pub fn comparable_to(&self, other: &PathOption) -> bool {
-            return self.get_current_node() == other.get_current_node();
-        }
-
-        ///Returns whether `self` has the same summary attributes as `other` and whether the two end at the same node.
-        pub fn equivalent_to(&self, other: &PathOption) -> bool {
-            return self.comparable_to(other) && self.summary.equivalent_to(&other.summary);
-        }
-
         ///Returns the node this `PathOption` is currently at.
         /// If this was a refuel at the depot, return `0`, not the special value
         pub fn get_current_node(&self) -> usize {
@@ -1022,41 +993,6 @@ mod solver_data {
                 loading_array[option.last_loading_distance as usize] |= key;
             }
             return loading_array;
-        }
-
-        ///Removes the elements of `path_options` that are completely inferior to `new_option`
-        /// and adds `new_option` if it was partially superior to at least one of the previous elements.
-        /// Returns `true` if a change was made, `false` otherwise
-        fn possibly_add_to_path_options(
-            path_options: &mut Vec<Rc<PathOption>>,
-            new_option: Option<PathOption>,
-        ) -> bool {
-            let unpacked_option = match new_option {
-                None => return false,
-                Some(item) => item,
-            };
-            //to detect whether something was removed
-            let original_length = path_options.len();
-            //remove the entries that are completely inferior to the new one (CAN THIS EVEN HAPPEN?)
-            path_options.retain(|option| !unpacked_option.completely_superior_to(&option));
-            if original_length != path_options.len() {
-                //something was removed => completely superior to something => insert, done
-                path_options.push(Rc::new(unpacked_option));
-                return true;
-            } else {
-                //check whether there is a reason against adding the new_option
-                for i in 0..path_options.len() {
-                    let comp_option = &path_options[i];
-                    if comp_option.completely_superior_to(&unpacked_option)
-                        || comp_option.equivalent_to(&unpacked_option)
-                    {
-                        return false;
-                    }
-                }
-                //no reason against insertion found
-                path_options.push(Rc::new(unpacked_option));
-                return true;
-            }
         }
 
         //Getter for `current_node`
