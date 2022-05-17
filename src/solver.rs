@@ -360,6 +360,8 @@ mod solver_data {
         total_distance: u32,
         ///the total
         total_time: u32,
+        ///the `n`th bit from the right represents whether the `ContainerOption` at index `n` is compatible with this `PathOption`
+        compatible_container_options: u8,
     }
 
     impl PathOptionSummary {
@@ -368,20 +370,23 @@ mod solver_data {
         pub fn partly_superior_to(&self, other: &PathOptionSummary) -> bool {
             return (self.total_distance < other.total_distance)
                 || (self.total_time < other.total_time)
-                || (self.fuel_level > other.fuel_level);
+                || (self.fuel_level > other.fuel_level)
+                //there is at least one option covered by self that is not covered by other
+                || !other.covers_other_options_completely(self);
         }
         ///Returns `true` if this summary is not worse than the other in any regard
         pub fn at_least_as_good_as(&self, other: &PathOptionSummary) -> bool {
             return (self.total_distance <= other.total_distance)
                 && (self.total_time <= other.total_time)
-                && (self.fuel_level >= other.fuel_level);
+                && (self.fuel_level >= other.fuel_level)
+                && self.covers_other_options_completely(other);
         }
-        ///Returns `true` if this summary is equivalent to the other
-        pub fn equivalent_to(&self, other: &PathOptionSummary) -> bool {
-            return (self.fuel_level == other.fuel_level)
-                && (self.total_distance == other.total_distance)
-                && (self.total_time == other.total_time);
+        ///Returns true if `self` is compatible with every `ContainerOption` that `other` is compatible with
+        fn covers_other_options_completely(&self, other: &PathOptionSummary) -> bool {
+            let difference = self.compatible_container_options ^ other.compatible_container_options;
+            return (difference & other.compatible_container_options) != 0;
         }
+
         //Creates a new `PathOptionSummary` that expands itself (`self`) to `to`.
         /// Takes request service and visiting times into account as well as refueling times.
         /// If `depot_refuel==true`, the truck is refueled when arriving at the depot.
@@ -397,6 +402,8 @@ mod solver_data {
             from: usize,
             to: usize,
             depot_refuel: bool,
+            compatible_container_options: u8,
+            loading_distance: u32,
         ) -> Option<PathOptionSummary> {
             let additional_distance = config.get_distance_between(from, to);
             //calculate fuel_level on arrival
@@ -410,6 +417,8 @@ mod solver_data {
             let total_distance = self.total_distance + additional_distance;
             //calculate new total_time, dealing with handling and refueling times
             let mut total_time = self.total_time + config.get_time_between(from, to);
+            //service time, always applied first, loading_distance only != 0 for fill_with_previous_path_options
+            total_time += config.get_depot_service_time() * loading_distance;
             //request handling times
             if to < config.get_first_afs() {
                 //not an AFS, either depot or
@@ -422,12 +431,9 @@ mod solver_data {
                         total_time = config.get_earliest_visiting_time_at_request_node(to)
                     }
                     total_time += config.get_service_time_at_request_node(to);
-                } else {
-                    if depot_refuel {
-                        total_time += truck.get_minutes_for_refueling(self.fuel_level);
-                        fuel_level = truck.get_fuel();
-                    }
-                    //total_time += config.get_depot_service_time();
+                } else if depot_refuel {
+                    total_time += truck.get_minutes_for_refueling(self.fuel_level);
+                    fuel_level = truck.get_fuel();
                 }
             } else {
                 //AFS
@@ -442,6 +448,7 @@ mod solver_data {
                 total_distance,
                 total_time,
                 fuel_level,
+                compatible_container_options,
             });
         }
     }
@@ -467,6 +474,7 @@ mod solver_data {
                 && (other.at_least_as_good_as(&self.summary));
         }
 
+        ///Create the complete `PathOption` after `self` using the given parameters.
         fn create_next_option(
             &self,
             own_index: usize,
@@ -553,6 +561,18 @@ mod solver_data {
             }
         }
 
+        ///Decodes the binary encoded mask, returning `true` if this `index` is set to 1/true
+        fn decode_loading_mask(mask: u8, index: usize) -> bool {
+            let index_mask = 1 << index;
+            return (mask & index_mask) != 0;
+        }
+
+        //Sets the `index` in `mask` to false/0
+        fn remove_index_from_mask(mask: u8, index: usize) -> u8 {
+            let index_mask = 1 << index;
+            return (!index_mask) & mask;
+        }
+
         ///Helper function to separate code. Fills `path_options` with the ones that can be reached from the ones in `current_state`.
         /// The paths from `current_state` are not copied as they
         fn fill_with_path_options_from_previous_state(
@@ -564,20 +584,50 @@ mod solver_data {
             container_options_at_node: &Vec<ContainerOption>,
         ) {
             let loading_array = SearchState::get_container_masks(container_options_at_node);
-            for loading_distance in (0..3).rev() {
-                if loading_array[loading_distance] == 0 {
+            for loading_distance in (0_u32..3).rev() {
+                if loading_array[loading_distance as usize] == 0 {
                     //nothing requires this loading distance anyway, so no need to even consider this case
                     continue;
                 }
+                //represents all the containers that would be compatible (loading_distance and lower)
+                let mut base_key: u8 = 0;
+                for i in 0..(loading_distance + 1) {
+                    base_key |= loading_array[i as usize];
+                }
                 for (option_index, option) in current_state.path_options.iter().enumerate() {
                     let from = option.get_current_node();
-                    //target node
+                    //remove the ones not compatible with this specific PathOption
+                    let mut compatible_container_options = base_key;
+                    for container_index in 0..container_options_at_node.len() {
+                        if PathOption::decode_loading_mask(
+                            compatible_container_options,
+                            container_index,
+                        ) && !PathOption::decode_loading_mask(
+                            option.summary.compatible_container_options,
+                            container_options_at_node[container_index].previous_index,
+                        ) {
+                            //option would be compatible with this loading_distance,
+                            //but the PathOption used as a starting point is not compatible with the previous ContainerOption
+                            //so set the distance_key for this ContainerOption to false
+                            compatible_container_options = PathOption::remove_index_from_mask(
+                                compatible_container_options,
+                                container_index,
+                            );
+                        }
+                    }
+                    //to target node
                     option.possibly_add_to_path_options(
                         option_index,
                         path_options,
-                        option
-                            .summary
-                            .next_summary(config, truck, from, node, false),
+                        option.summary.next_summary(
+                            config,
+                            truck,
+                            from,
+                            node,
+                            false,
+                            compatible_container_options,
+                            loading_distance,
+                        ),
                         node,
                         false,
                         true,
@@ -587,7 +637,15 @@ mod solver_data {
                         option.possibly_add_to_path_options(
                             option_index,
                             path_options,
-                            option.summary.next_summary(config, truck, from, afs, false),
+                            option.summary.next_summary(
+                                config,
+                                truck,
+                                from,
+                                afs,
+                                false,
+                                compatible_container_options,
+                                loading_distance,
+                            ),
                             afs,
                             false,
                             true,
@@ -597,11 +655,23 @@ mod solver_data {
                     option.possibly_add_to_path_options(
                         option_index,
                         path_options,
-                        option.summary.next_summary(config, truck, from, 0, true),
+                        option.summary.next_summary(
+                            config,
+                            truck,
+                            from,
+                            0,
+                            true,
+                            compatible_container_options,
+                            loading_distance,
+                        ),
                         0,
                         true,
                         true,
                     );
+                }
+                if config.get_depot_service_time() == 0 {
+                    //speedup in case the other loops would be effectively identical/yield only inferior results
+                    return;
                 }
             }
         }
@@ -632,9 +702,15 @@ mod solver_data {
                     option.possibly_add_to_path_options(
                         option.previous_index,
                         path_options,
-                        option
-                            .summary
-                            .next_summary(config, truck, current_node, node, false),
+                        option.summary.next_summary(
+                            config,
+                            truck,
+                            current_node,
+                            node,
+                            false,
+                            option.summary.compatible_container_options,
+                            0,
+                        ),
                         node,
                         false,
                         false,
@@ -652,6 +728,8 @@ mod solver_data {
                                     current_node,
                                     afs,
                                     false,
+                                    option.summary.compatible_container_options,
+                                    0,
                                 ),
                                 afs,
                                 false,
@@ -663,9 +741,15 @@ mod solver_data {
                     option.possibly_add_to_path_options(
                         option.previous_index,
                         path_options,
-                        option
-                            .summary
-                            .next_summary(config, truck, current_node, 0, true),
+                        option.summary.next_summary(
+                            config,
+                            truck,
+                            current_node,
+                            0,
+                            true,
+                            option.summary.compatible_container_options,
+                            0,
+                        ),
                         0,
                         true,
                         false,
@@ -707,25 +791,13 @@ mod solver_data {
         }
 
         ///Creates the initial `SearchState` at the depot with the given `fuel_capacity`, no actions taken so far
-        pub fn start_state(truck: &Truck) -> Rc<SearchState> {
-            let mut path = Vec::with_capacity(1);
-            path.push(0);
-            let mut path_options = Vec::with_capacity(1);
-            path_options.push(Rc::new(PathOption {
-                summary: PathOptionSummary {
-                    fuel_level: truck.get_fuel(),
-                    total_distance: 0,
-                    total_time: 0,
-                },
-                path,
-                previous_index: 0,
-            }));
+        pub fn start_state(config: &Config, truck: &Truck) -> Rc<SearchState> {
             //container loading options
             let container_vec_capacity = (2 ^ (truck.get_num_20() + truck.get_num_40())) as usize;
-            let mut options = Vec::with_capacity(container_vec_capacity);
+            let mut container_options = Vec::with_capacity(container_vec_capacity);
             for empty_20 in 0..(truck.get_num_20() + 1) {
                 for empty_40 in 0..(truck.get_num_40() + 1) {
-                    options.push(ContainerOption {
+                    container_options.push(ContainerOption {
                         empty_20,
                         empty_40,
                         num_20: empty_20,
@@ -735,10 +807,36 @@ mod solver_data {
                     });
                 }
             }
+            //path_options
+            let mut path_options = Vec::with_capacity(3);
+            let masks = SearchState::get_container_masks(&container_options);
+            for loading_distance in 0..3 {
+                if masks[loading_distance] == 0 {
+                    //no ContainerOption has this loading distance (should happen only for 2 loadings, at least one is always possible)
+                    continue;
+                }
+                let mut compatible_container_options = 0;
+                for i in 0..(loading_distance + 1) {
+                    compatible_container_options |= masks[i];
+                }
+                //has to be created again every single time
+                let mut path = Vec::with_capacity(1);
+                path.push(0);
+                path_options.push(Rc::new(PathOption {
+                    summary: PathOptionSummary {
+                        fuel_level: truck.get_fuel(),
+                        total_distance: 0,
+                        total_time: loading_distance as u32 * config.get_depot_service_time(),
+                        compatible_container_options,
+                    },
+                    path,
+                    previous_index: 0,
+                }));
+            }
             let search_state = SearchState {
                 current_node: 0,
                 path_options,
-                container_options: options,
+                container_options,
                 full_request_1_source: 0,
                 full_request_2_source: 0,
                 requests_visisted: 0,
@@ -1030,7 +1128,7 @@ mod solver_data {
 
         ///Returns `(load_0, load_1, load_2)`. Each of these encodes the following: The `n`th bit from the right is one, if the `ContainerOption`
         /// at index `n` has a `last_loading_time` of this value (e.g. 0 for `load_0`)
-        fn get_container_masks(container_options_at_node: &Vec<ContainerOption>) -> [i32; 3] {
+        fn get_container_masks(container_options_at_node: &Vec<ContainerOption>) -> [u8; 3] {
             let mut loading_array = [0, 0, 0];
             for index in 0..container_options_at_node.len() {
                 assert!(index < 8, "More than 8 ContainerOptions!");
@@ -1115,7 +1213,7 @@ fn solve_for_truck(config: &Config, truck_index: usize, verbose: bool) -> KnownR
         );
     }
 
-    let root_state = SearchState::start_state(truck);
+    let root_state = SearchState::start_state(config, truck);
     let mut known_options = KnownRoutesForTruck::new();
     //special case, normal possibly_add() not called otherwise
     known_options.possibly_add(&root_state);
