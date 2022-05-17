@@ -372,19 +372,19 @@ mod solver_data {
                 || (self.total_time < other.total_time)
                 || (self.fuel_level > other.fuel_level)
                 //there is at least one option covered by self that is not covered by other
-                || !other.covers_other_options_completely(self);
+                || !other.covers_completely(self);
         }
         ///Returns `true` if this summary is not worse than the other in any regard
         pub fn at_least_as_good_as(&self, other: &PathOptionSummary) -> bool {
             return (self.total_distance <= other.total_distance)
                 && (self.total_time <= other.total_time)
                 && (self.fuel_level >= other.fuel_level)
-                && self.covers_other_options_completely(other);
+                && self.covers_completely(other);
         }
         ///Returns true if `self` is compatible with every `ContainerOption` that `other` is compatible with
-        fn covers_other_options_completely(&self, other: &PathOptionSummary) -> bool {
+        fn covers_completely(&self, other: &PathOptionSummary) -> bool {
             let difference = self.compatible_container_options ^ other.compatible_container_options;
-            return (difference & other.compatible_container_options) != 0;
+            return (difference & other.compatible_container_options) == 0;
         }
 
         //Creates a new `PathOptionSummary` that expands itself (`self`) to `to`.
