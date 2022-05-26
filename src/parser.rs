@@ -270,7 +270,7 @@ mod parser_test {
         assert_eq!(truck.get_num_40(), 0);
         assert_eq!(truck.get_fuel(), 28500);
         //times
-        assert_eq!(config.get_depot_service_time(), 0);
+        assert_eq!(config.get_initial_depot_service_time(), 0);
         assert_eq!(config.get_service_time_at_request_node(1), 10);
         assert_eq!(config.get_earliest_visiting_time_at_request_node(8), 404);
         assert_eq!(config.get_latest_visiting_time_at_request_node(7), 802);

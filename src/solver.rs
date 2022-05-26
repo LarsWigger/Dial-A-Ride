@@ -353,7 +353,7 @@ mod solver_data {
     ///     - less time taken when refueling later and less time is always an advantage
     /// - `total_distance`: The total distance travelled by the vehicle at the last node. All else being equal, lower is always better.
     /// - `total_time`: The total time, might include waiting and fueling times. All else being equal, lower is always better. If too early, waiting is still possible
-    struct PathOptionSummary {
+    pub struct PathOptionSummary {
         ///the fuel level of the vehicle at the last node, in 0.01l to avoid floating point operations
         fuel_level: u32,
         ///the total distance travelled by the vehicle at the last node
@@ -418,7 +418,7 @@ mod solver_data {
             //calculate new total_time, dealing with handling and refueling times
             let mut total_time = self.total_time + config.get_time_between(from, to);
             //service time, always applied first, loading_distance only != 0 for fill_with_previous_path_options
-            total_time += config.get_depot_service_time() * loading_distance;
+            total_time += config.get_initial_depot_service_time() * loading_distance;
             //request handling times
             if to < config.get_first_afs() {
                 //not an AFS, either depot or
@@ -669,7 +669,7 @@ mod solver_data {
                         true,
                     );
                 }
-                if config.get_depot_service_time() == 0 {
+                if config.get_initial_depot_service_time() == 0 {
                     //speedup in case the other loops would be effectively identical/yield only inferior results
                     return;
                 }
@@ -808,30 +808,44 @@ mod solver_data {
                 }
             }
             //path_options
-            let mut path_options = Vec::with_capacity(3);
+            let mut path_options: Vec<Rc<PathOption>> = Vec::with_capacity(3);
             let masks = SearchState::get_container_masks(&container_options);
-            for loading_distance in 0..3 {
+            //all the possible loading distances, covered in descending order
+            for loading_distance in (0..3).rev() {
                 if masks[loading_distance] == 0 {
                     //no ContainerOption has this loading distance (should happen only for 2 loadings, at least one is always possible)
                     continue;
                 }
+                //calculate compatible_container_options
                 let mut compatible_container_options = 0;
                 for i in 0..(loading_distance + 1) {
                     compatible_container_options |= masks[i];
                 }
-                //has to be created again every single time
-                let mut path = Vec::with_capacity(1);
-                path.push(0);
-                path_options.push(Rc::new(PathOption {
-                    summary: PathOptionSummary {
-                        fuel_level: truck.get_fuel(),
-                        total_distance: 0,
-                        total_time: loading_distance as u32 * config.get_depot_service_time(),
-                        compatible_container_options,
-                    },
-                    path,
-                    previous_index: 0,
-                }));
+                let new_summary = PathOptionSummary {
+                    fuel_level: truck.get_fuel(),
+                    total_distance: 0,
+                    total_time: loading_distance as u32 * config.get_initial_depot_service_time(),
+                    compatible_container_options,
+                };
+                //determine whether new_summary should be added. Since the higher ones are added first, this comparison is sufficient
+                let mut add = true;
+                for option in &path_options {
+                    if option.summary.at_least_as_good_as(&new_summary) {
+                        add = false;
+                        break;
+                    }
+                }
+                if add {
+                    //has to be created again every single time
+                    let mut path = Vec::with_capacity(1);
+                    path.push(0);
+                    let new_option = Rc::new(PathOption {
+                        summary: new_summary,
+                        path,
+                        previous_index: 0,
+                    });
+                    path_options.push(new_option);
+                }
             }
             let search_state = SearchState {
                 current_node: 0,
