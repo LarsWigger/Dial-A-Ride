@@ -417,8 +417,6 @@ mod solver_data {
             let total_distance = self.total_distance + additional_distance;
             //calculate new total_time, dealing with handling and refueling times
             let mut total_time = self.total_time + config.get_time_between(from, to);
-            //service time, always applied first, loading_distance only != 0 for fill_with_previous_path_options
-            total_time += config.get_subsequent_depot_service_time() * loading_distance;
             //request handling times
             if to < config.get_first_afs() {
                 //not an AFS, either depot or
@@ -430,10 +428,14 @@ mod solver_data {
                         //too early, just wait
                         total_time = config.get_earliest_visiting_time_at_request_node(to)
                     }
+                    assert!(loading_distance < 2);
                     total_time += config.get_service_time_at_request_node(to);
                 } else if depot_refuel {
                     total_time += truck.get_minutes_for_refueling(self.fuel_level);
                     fuel_level = truck.get_fuel();
+                } else {
+                    //depot is the end node
+                    total_time += config.get_subsequent_depot_service_time() * loading_distance;
                 }
             } else {
                 //AFS
@@ -815,7 +817,7 @@ mod solver_data {
                         num_20: empty_20,
                         num_40: empty_40,
                         previous_index: 0,
-                        depot_loading_distance: empty_20 + empty_40,
+                        loading_distance: empty_20 + empty_40,
                         compatible_path_options: 0, //overwritten later
                         alive: true,
                     });
@@ -984,7 +986,7 @@ mod solver_data {
                         num_20,
                         num_40,
                         previous_index,
-                        depot_loading_distance: 0,
+                        loading_distance: request.full_20 + request.full_40,
                         compatible_path_options: 0, //overwritten later
                         alive: previous_container_option.alive,
                     });
@@ -1007,7 +1009,7 @@ mod solver_data {
                         num_20,
                         num_40,
                         previous_index,
-                        depot_loading_distance: 0,
+                        loading_distance: request.empty_20 + request.empty_40,
                         compatible_path_options: 0, //overwritten later
                         alive: previous_container_option.alive,
                     });
@@ -1031,7 +1033,7 @@ mod solver_data {
                         num_20,
                         num_40,
                         previous_index,
-                        depot_loading_distance: 0,
+                        loading_distance: -(request.full_20 + request.full_40),
                         compatible_path_options: 0, //overwritten later
                         alive: previous_container_option.alive,
                     });
@@ -1055,7 +1057,7 @@ mod solver_data {
                         num_20,
                         num_40,
                         previous_index,
-                        depot_loading_distance: 0,
+                        loading_distance: -(request.empty_20 + request.empty_40),
                         compatible_path_options: 0, //overwritten later
                         alive: previous_container_option.alive,
                     });
@@ -1102,7 +1104,7 @@ mod solver_data {
                                 num_20,
                                 num_40,
                                 previous_index: existing_index,
-                                depot_loading_distance: 0, //no change here
+                                loading_distance: 0, //no change here
                                 compatible_path_options: existing_option.compatible_path_options, //overwritten later
                                 alive: false, //mark as dead, only to notify during further loadings that this should not be loaded anew
                             });
@@ -1114,8 +1116,7 @@ mod solver_data {
                         {
                             //for each possible predecessor, create its successor
                             let compatible_path_options = previous_option.compatible_path_options;
-                            let depot_loading_distance = (empty_20 - previous_option.empty_20)
-                                .abs()
+                            let loading_distance = (empty_20 - previous_option.empty_20).abs()
                                 + (empty_40 - previous_option.empty_40).abs();
                             let new_option = ContainerOption {
                                 empty_20,
@@ -1123,7 +1124,7 @@ mod solver_data {
                                 num_20,
                                 num_40,
                                 previous_index,
-                                depot_loading_distance,
+                                loading_distance,
                                 compatible_path_options, //at this point, it is the value from the previous `ContainerOption`, overwritten later
                                 alive: true, //could not be reached without this stop, important
                             };
@@ -1225,7 +1226,7 @@ mod solver_data {
                 let option = &container_options_at_node[index];
                 //key is 1 at the corresponding index
                 let key = 1 << index;
-                loading_array[option.depot_loading_distance as usize] |= key;
+                loading_array[option.loading_distance as usize] |= key;
             }
             return loading_array;
         }
@@ -1262,9 +1263,8 @@ mod solver_data {
         num_40: i8,
         ///the index of the previous `ContainerNumber` option
         previous_index: usize,
-        ///the number of containers that were unloaded the last time the depot was visited. May be 0,1 or 2, no other values possible.
-        /// Summary metric, lower is better
-        depot_loading_distance: i8,
+        ///the number of containers that were changed from the previous `SearchState` to this one
+        loading_distance: i8,
         ///the `path_options` at the previous `SearchState` that are compatible with `self`. Summary metric
         compatible_path_options: u128,
         ///if `true`, this `ContainerOption` is still important on this path, otherwise it is just a placeholder
@@ -1280,12 +1280,12 @@ mod solver_data {
         }
         ///Returns whether `self` is superior to `other` in at least one regard. Does not check whether they are comparable in the first place.
         pub fn partially_superior_to(&self, other: &ContainerOption) -> bool {
-            return self.depot_loading_distance < other.depot_loading_distance
+            return self.loading_distance < other.loading_distance
                 || !other.covers_completely(self);
         }
         ///Returns whether `self` is at least as good as `other` in every regard. Does not check whether they are comparable in the first place.
         pub fn at_least_as_good_as(&self, other: &ContainerOption) -> bool {
-            return self.depot_loading_distance <= other.depot_loading_distance
+            return self.loading_distance <= other.loading_distance
                 && self.covers_completely(other);
         }
 
