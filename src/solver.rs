@@ -475,9 +475,14 @@ mod solver_data {
         }
 
         ///Create the complete `PathOption` after `self` using the given parameters.
+        /// - `previous_index`: the index of the `PathOption` the new one is based on
+        /// - `new_summary`: the summary of the new `PathOption`
+        /// - `node`: the node newly added to the path
+        /// - `depot_refuel`: was a depot_refuel done at this step?
+        /// - `new_path`: is this the initial path, meaning that the previous one is not copied?
         fn create_next_option(
             &self,
-            own_index: usize,
+            previous_index: usize,
             new_summary: PathOptionSummary,
             node: usize,
             depot_refuel: bool,
@@ -494,7 +499,8 @@ mod solver_data {
                 for i in 0..self.path.len() {
                     path.push(self.path[i]);
                 }
-                last_node = path[path.len() - 1]
+                last_node = path[path.len() - 1];
+                assert!(self.previous_index == previous_index);
             };
             if depot_refuel {
                 if last_node != 0 {
@@ -508,15 +514,16 @@ mod solver_data {
             return Rc::new(PathOption {
                 summary: new_summary,
                 path,
-                previous_index: own_index,
+                previous_index,
             });
         }
 
         ///Removes the elements of `path_options` that are completely inferior to `new_option`
         /// and adds `new_option` if it was partially superior to at least one of the previous elements.
+        /// To avoid unnecessary allocations, the creation is done only when needed, but this requires passing more arguments to this function
         fn possibly_add_to_path_options(
             &self,
-            own_index: usize,
+            previous_index: usize,
             path_options: &mut Vec<Rc<PathOption>>,
             new_summary: Option<PathOptionSummary>,
             node: usize,
@@ -534,7 +541,7 @@ mod solver_data {
             if original_length != path_options.len() {
                 //something was removed => completely superior to something => insert, done
                 path_options.push(self.create_next_option(
-                    own_index,
+                    previous_index,
                     new_summary,
                     node,
                     depot_refuel,
@@ -552,7 +559,7 @@ mod solver_data {
                 }
                 //no reason against insertion found
                 path_options.push(self.create_next_option(
-                    own_index,
+                    previous_index,
                     new_summary,
                     node,
                     depot_refuel,
@@ -562,7 +569,7 @@ mod solver_data {
         }
 
         ///Decodes the binary encoded mask, returning `true` if this `index` is set to 1/true
-        fn decode_loading_mask(mask: u32, index: usize) -> bool {
+        fn is_container_compatible(mask: u32, index: usize) -> bool {
             let index_mask = 1 << index;
             return (mask & index_mask) != 0;
         }
@@ -594,16 +601,16 @@ mod solver_data {
                 for i in 0..(loading_distance + 1) {
                     base_key |= loading_array[i as usize];
                 }
-                for (option_index, option) in current_state.path_options.iter().enumerate() {
-                    let from = option.get_current_node();
+                for (path_index, path_option) in current_state.path_options.iter().enumerate() {
+                    let from = path_option.get_current_node();
                     //remove the ones not compatible with this specific PathOption
                     let mut compatible_container_options = base_key; //done to avoid recalculating base_key
                     for container_index in 0..container_options_at_node.len() {
-                        if PathOption::decode_loading_mask(
+                        if PathOption::is_container_compatible(
                             compatible_container_options,
                             container_index,
-                        ) && !PathOption::decode_loading_mask(
-                            option.summary.compatible_container_options,
+                        ) && !PathOption::is_container_compatible(
+                            path_option.summary.compatible_container_options,
                             container_options_at_node[container_index].previous_index,
                         ) {
                             //option would be compatible with this loading_distance,
@@ -617,10 +624,10 @@ mod solver_data {
                     }
                     //routing options
                     //to target node
-                    option.possibly_add_to_path_options(
-                        option_index,
+                    path_option.possibly_add_to_path_options(
+                        path_index,
                         path_options,
-                        option.summary.next_summary(
+                        path_option.summary.next_summary(
                             config,
                             truck,
                             from,
@@ -635,10 +642,10 @@ mod solver_data {
                     );
                     //fuel stations
                     for afs in config.get_first_afs()..config.get_dummy_depot() {
-                        option.possibly_add_to_path_options(
-                            option_index,
+                        path_option.possibly_add_to_path_options(
+                            path_index,
                             path_options,
-                            option.summary.next_summary(
+                            path_option.summary.next_summary(
                                 config,
                                 truck,
                                 from,
@@ -653,10 +660,10 @@ mod solver_data {
                         );
                     }
                     //depot refueling
-                    option.possibly_add_to_path_options(
-                        option_index,
+                    path_option.possibly_add_to_path_options(
+                        path_index,
                         path_options,
-                        option.summary.next_summary(
+                        path_option.summary.next_summary(
                             config,
                             truck,
                             from,
@@ -904,7 +911,7 @@ mod solver_data {
             for (container_index, container_option) in container_options.iter_mut().enumerate() {
                 container_option.compatible_path_options = 0;
                 for (path_index, path_option) in path_options.iter().enumerate() {
-                    if PathOption::decode_loading_mask(
+                    if PathOption::is_container_compatible(
                         path_option.summary.compatible_container_options,
                         container_index,
                     ) {
