@@ -813,6 +813,7 @@ mod solver_data {
                         previous_index: 0,
                         last_loading_distance: empty_20 + empty_40,
                         compatible_path_options: 0, //overwritten later
+                        alive: true,
                     });
                 }
             }
@@ -966,43 +967,45 @@ mod solver_data {
             if request_node <= config.get_full_pickup() {
                 //full pickup request
                 for previous_index in 0..self.container_options.len() {
-                    let container_number = &self.container_options[previous_index];
-                    let num_20 = container_number.num_20 + request.full_20;
-                    let num_40 = container_number.num_40 + request.full_40;
+                    let previous_container_option = &self.container_options[previous_index];
+                    let num_20 = previous_container_option.num_20 + request.full_20;
+                    let num_40 = previous_container_option.num_40 + request.full_40;
                     if num_20 > truck.get_num_20() || num_40 > truck.get_num_40() {
                         //cannot load the new containers with the previous load
                         continue;
                     }
                     container_options.push(ContainerOption {
-                        empty_20: container_number.empty_20,
-                        empty_40: container_number.empty_40,
+                        empty_20: previous_container_option.empty_20,
+                        empty_40: previous_container_option.empty_40,
                         num_20,
                         num_40,
                         previous_index,
-                        last_loading_distance: container_number.last_loading_distance,
+                        last_loading_distance: previous_container_option.last_loading_distance,
                         compatible_path_options: 0, //overwritten later
+                        alive: previous_container_option.alive,
                     });
                 }
             } else if request_node < config.get_first_full_dropoff() {
                 //empty pickup request
                 for previous_index in 0..self.container_options.len() {
-                    let container_number = &self.container_options[previous_index];
-                    let num_20 = container_number.num_20 + request.empty_20;
-                    let num_40 = container_number.num_40 + request.empty_40;
+                    let previous_container_option = &self.container_options[previous_index];
+                    let num_20 = previous_container_option.num_20 + request.empty_20;
+                    let num_40 = previous_container_option.num_40 + request.empty_40;
                     if num_20 > truck.get_num_20() || num_40 > truck.get_num_40() {
                         //cannot load the new containers with the previous load
                         continue;
                     }
-                    let empty_20 = container_number.empty_20 + request.empty_20;
-                    let empty_40 = container_number.empty_40 + request.empty_40;
+                    let empty_20 = previous_container_option.empty_20 + request.empty_20;
+                    let empty_40 = previous_container_option.empty_40 + request.empty_40;
                     container_options.push(ContainerOption {
                         empty_20,
                         empty_40,
                         num_20,
                         num_40,
                         previous_index,
-                        last_loading_distance: container_number.last_loading_distance,
+                        last_loading_distance: previous_container_option.last_loading_distance,
                         compatible_path_options: 0, //overwritten later
+                        alive: previous_container_option.alive,
                     });
                 }
             } else if request_node < config.get_first_full_dropoff() + config.get_full_pickup() {
@@ -1013,42 +1016,44 @@ mod solver_data {
                     return container_options;
                 }
                 for previous_index in 0..self.container_options.len() {
-                    let container_number = &self.container_options[previous_index];
+                    let previous_container_option = &self.container_options[previous_index];
                     //values are negative, so this is effectively a subtraction
-                    let num_20 = container_number.num_20 + request.full_20;
-                    let num_40 = container_number.num_40 + request.full_40;
+                    let num_20 = previous_container_option.num_20 + request.full_20;
+                    let num_40 = previous_container_option.num_40 + request.full_40;
                     //cannot lead to invalid options, the necessary containers have to be loaded
                     container_options.push(ContainerOption {
-                        empty_20: container_number.empty_20,
-                        empty_40: container_number.empty_40,
+                        empty_20: previous_container_option.empty_20,
+                        empty_40: previous_container_option.empty_40,
                         num_20,
                         num_40,
                         previous_index,
-                        last_loading_distance: container_number.last_loading_distance,
+                        last_loading_distance: previous_container_option.last_loading_distance,
                         compatible_path_options: 0, //overwritten later
+                        alive: previous_container_option.alive,
                     });
                 }
             } else {
                 //empty delivery
                 for previous_index in 0..self.container_options.len() {
-                    let container_number = &self.container_options[previous_index];
+                    let previous_container_option = &self.container_options[previous_index];
                     //can also just add this because the values are negative
-                    let empty_20 = container_number.empty_20 + request.empty_20;
-                    let empty_40 = container_number.empty_40 + request.empty_40;
+                    let empty_20 = previous_container_option.empty_20 + request.empty_20;
+                    let empty_40 = previous_container_option.empty_40 + request.empty_40;
                     if empty_20 < 0 || empty_40 < 0 {
                         //cannot load the new containers with the previous load
                         continue;
                     }
-                    let num_20 = container_number.num_20 + request.empty_20;
-                    let num_40 = container_number.num_40 + request.empty_40;
+                    let num_20 = previous_container_option.num_20 + request.empty_20;
+                    let num_40 = previous_container_option.num_40 + request.empty_40;
                     container_options.push(ContainerOption {
                         empty_20,
                         empty_40,
                         num_20,
                         num_40,
                         previous_index,
-                        last_loading_distance: container_number.last_loading_distance,
+                        last_loading_distance: previous_container_option.last_loading_distance,
                         compatible_path_options: 0, //overwritten later
+                        alive: previous_container_option.alive,
                     });
                 }
             }
@@ -1068,7 +1073,8 @@ mod solver_data {
             let org_full_40 = self.container_options[0].num_40 - self.container_options[0].empty_40;
             //iterate over possible combinations of empty containers and see whether they fit next to the full ones
             let container_vec_capacity = 8;
-            let mut options: Vec<ContainerOption> = Vec::with_capacity(container_vec_capacity);
+            let mut container_options: Vec<ContainerOption> =
+                Vec::with_capacity(container_vec_capacity);
             for empty_20 in 0..(truck.get_num_20() + 1) {
                 for empty_40 in 0..(truck.get_num_40() + 1) {
                     let num_20 = org_full_20 + empty_20;
@@ -1077,21 +1083,32 @@ mod solver_data {
                         //invalid loading, no point in trying this out
                         continue;
                     }
-                    //if such a `ContainerOption` already exists, there is no point in adding it - if possible, loading a container earlier
-                    //is at least as good as loading it later
+                    //if such a `ContainerOption` already exists, add it, but mark it as such - and do not do new loadings at this step
                     let mut add = true;
-                    for existing_option in &self.container_options {
+                    for (existing_index, existing_option) in
+                        self.container_options.iter().enumerate()
+                    {
                         if existing_option.empty_20 == empty_20
                             && existing_option.empty_40 == empty_40
                         {
                             add = false;
-                            break;
+                            container_options.push(ContainerOption {
+                                empty_20,
+                                empty_40,
+                                num_20,
+                                num_40,
+                                previous_index: existing_index,
+                                last_loading_distance: 0,
+                                compatible_path_options: existing_option.compatible_path_options, //overwritten later
+                                alive: false, //mark as dead, only to notify during further loadings that this should not be loaded anew
+                            });
                         }
                     }
                     if add {
-                        for previous_index in 0..self.container_options.len() {
+                        for (previous_index, previous_option) in
+                            self.container_options.iter().enumerate()
+                        {
                             //for each possible predecessor, create its successor
-                            let previous_option = &self.container_options[previous_index];
                             let compatible_path_options = previous_option.compatible_path_options;
                             let last_loading_distance = (empty_20 - previous_option.empty_20).abs()
                                 + (empty_40 - previous_option.empty_40).abs();
@@ -1103,31 +1120,32 @@ mod solver_data {
                                 previous_index,
                                 last_loading_distance,
                                 compatible_path_options, //at this point, it is the value from the previous `ContainerOption`, overwritten later
+                                alive: true, //could not be reached without this stop, important
                             };
                             //decide what to do with the option
-                            let len_before = options.len();
-                            options
+                            let len_before = container_options.len();
+                            container_options
                                 .retain(|x| !new_option.comparable_and_completely_superior_to(&x));
-                            if len_before != options.len() {
+                            if len_before != container_options.len() {
                                 //something was removed for being completely inferior to new_option, add new_option
-                                options.push(new_option);
+                                container_options.push(new_option);
                             } else {
                                 let mut no_reason_against_adding = true;
-                                for option in &options {
+                                for option in &container_options {
                                     if option.at_least_as_good_as(&new_option) {
                                         no_reason_against_adding = false;
                                         break;
                                     }
                                 }
                                 if no_reason_against_adding {
-                                    options.push(new_option);
+                                    container_options.push(new_option);
                                 }
                             }
                         }
                     }
                 }
             }
-            return options;
+            return container_options;
         }
 
         ///Returns whether the given `request` has been visited, makes the binary encoding more accessible.
@@ -1242,6 +1260,9 @@ mod solver_data {
         last_loading_distance: i8,
         ///the `path_options` at the previous `SearchState` that are compatible with `self`. Summary metric
         compatible_path_options: u32,
+        ///if `true`, this `ContainerOption` is still important on this path, otherwise it is just a placeholder
+        /// to note that this could have been loaded at an earlier stop
+        pub alive: bool,
     }
 
     impl ContainerOption {
@@ -1337,18 +1358,12 @@ fn solve_for_truck_recursive(
     assert!(current_state.get_current_node() != config.get_dummy_depot());
     if current_state.get_current_node() != 0 {
         //not at depot, may route there if it makes sense
-        let new_container_options_at_depot = current_state.get_depot_visit_options(config, truck);
-        let new_recursive_call = new_container_options_at_depot.len() != 0;
+        let container_options = current_state.get_depot_visit_options(config, truck);
+        let new_recursive_call = at_least_one_living_container_option(&container_options);
         let route_can_be_finished = !current_state.is_carrying_full_container();
-        if route_can_be_finished || new_container_options_at_depot.len() > 0 {
+        if route_can_be_finished || new_recursive_call {
             //routing to the depot makes sense
-            match SearchState::route_to_node(
-                config,
-                truck,
-                current_state,
-                0,
-                new_container_options_at_depot,
-            ) {
+            match SearchState::route_to_node(config, truck, current_state, 0, container_options) {
                 Option::None => (),
                 Option::Some(state) => {
                     if route_can_be_finished {
@@ -1366,7 +1381,7 @@ fn solve_for_truck_recursive(
         //calculate what container_options would exist at the next state. If there are none, the request cannot be served
         let container_options =
             current_state.get_container_options_at_node(config, truck, request_node);
-        if container_options.len() != 0 {
+        if at_least_one_living_container_option(&container_options) {
             match SearchState::route_to_node(
                 config,
                 truck,
@@ -1381,4 +1396,13 @@ fn solve_for_truck_recursive(
             };
         };
     }
+}
+
+fn at_least_one_living_container_option(container_options: &Vec<ContainerOption>) -> bool {
+    for index in 0..container_options.len() {
+        if container_options[index].alive {
+            return true;
+        }
+    }
+    return false;
 }
