@@ -1259,7 +1259,7 @@ mod solver_data {
         /// Summary metric, lower is better
         last_loading_distance: i8,
         ///the `path_options` at the previous `SearchState` that are compatible with `self`. Summary metric
-        compatible_path_options: u32,
+        compatible_path_options: u128,
         ///if `true`, this `ContainerOption` is still important on this path, otherwise it is just a placeholder
         /// to note that this could have been loaded at an earlier stop
         pub alive: bool,
@@ -1293,7 +1293,7 @@ mod solver_data {
             return bits_only_in_other == 0;
         }
         fn set_compatible(mut self, path_index: usize) {
-            assert!(path_index < 32);
+            assert!(path_index < 128);
             let mask = 1 << path_index;
             self.compatible_path_options |= mask;
         }
