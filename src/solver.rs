@@ -361,7 +361,7 @@ mod solver_data {
         ///the total
         total_time: u32,
         ///the `n`th bit from the right represents whether the `ContainerOption` at index `n` is compatible with this `PathOption`
-        compatible_container_options: u8,
+        compatible_container_options: u32,
     }
 
     impl PathOptionSummary {
@@ -402,7 +402,7 @@ mod solver_data {
             from: usize,
             to: usize,
             depot_refuel: bool,
-            compatible_container_options: u8,
+            compatible_container_options: u32,
             loading_distance: u32,
         ) -> Option<PathOptionSummary> {
             let additional_distance = config.get_distance_between(from, to);
@@ -562,13 +562,13 @@ mod solver_data {
         }
 
         ///Decodes the binary encoded mask, returning `true` if this `index` is set to 1/true
-        fn decode_loading_mask(mask: u8, index: usize) -> bool {
+        fn decode_loading_mask(mask: u32, index: usize) -> bool {
             let index_mask = 1 << index;
             return (mask & index_mask) != 0;
         }
 
         //Sets the `index` in `mask` to false/0
-        fn remove_index_from_mask(mask: u8, index: usize) -> u8 {
+        fn remove_index_from_mask(mask: u32, index: usize) -> u32 {
             let index_mask = 1 << index;
             return (!index_mask) & mask;
         }
@@ -590,7 +590,7 @@ mod solver_data {
                     continue;
                 }
                 //represents all the containers that would be compatible (loading_distance and lower)
-                let mut base_key: u8 = 0;
+                let mut base_key = 0;
                 for i in 0..(loading_distance + 1) {
                     base_key |= loading_array[i as usize];
                 }
@@ -1142,10 +1142,10 @@ mod solver_data {
 
         ///Returns `(load_0, load_1, load_2)`. Each of these encodes the following: The `n`th bit from the right is one, if the `ContainerOption`
         /// at index `n` has a `last_loading_time` of this value (e.g. 0 for `load_0`)
-        fn get_container_masks(container_options_at_node: &Vec<ContainerOption>) -> [u8; 3] {
+        fn get_container_masks(container_options_at_node: &Vec<ContainerOption>) -> [u32; 3] {
             let mut loading_array = [0, 0, 0];
             for index in 0..container_options_at_node.len() {
-                assert!(index < 8, "More than 8 ContainerOptions!");
+                assert!(index < 32, "More than 8 ContainerOptions!");
                 let option = &container_options_at_node[index];
                 //key is 1 at the corresponding index
                 let key = 1 << index;
