@@ -1132,7 +1132,9 @@ mod solver_data {
                             } else {
                                 let mut no_reason_against_adding = true;
                                 for option in &container_options {
-                                    if option.at_least_as_good_as(&new_option) {
+                                    if option.comparable_to(&new_option)
+                                        && option.at_least_as_good_as(&new_option)
+                                    {
                                         no_reason_against_adding = false;
                                         break;
                                     }
