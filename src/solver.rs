@@ -804,6 +804,7 @@ mod solver_data {
                         num_40: empty_40,
                         previous_index: 0,
                         last_loading_distance: empty_20 + empty_40,
+                        compatible_path_options: 0, //overwritten later
                     });
                 }
             }
@@ -946,6 +947,7 @@ mod solver_data {
                         num_40,
                         previous_index,
                         last_loading_distance: container_number.last_loading_distance,
+                        compatible_path_options: 0, //overwritten later
                     });
                 }
             } else if request_node < config.get_first_full_dropoff() {
@@ -967,6 +969,7 @@ mod solver_data {
                         num_40,
                         previous_index,
                         last_loading_distance: container_number.last_loading_distance,
+                        compatible_path_options: 0, //overwritten later
                     });
                 }
             } else if request_node < config.get_first_full_dropoff() + config.get_full_pickup() {
@@ -989,6 +992,7 @@ mod solver_data {
                         num_40,
                         previous_index,
                         last_loading_distance: container_number.last_loading_distance,
+                        compatible_path_options: 0, //overwritten later
                     });
                 }
             } else {
@@ -1011,6 +1015,7 @@ mod solver_data {
                         num_40,
                         previous_index,
                         last_loading_distance: container_number.last_loading_distance,
+                        compatible_path_options: 0, //overwritten later
                     });
                 }
             }
@@ -1030,7 +1035,7 @@ mod solver_data {
             let org_full_40 = self.container_options[0].num_40 - self.container_options[0].empty_40;
             //iterate over possible combinations of empty containers and see whether they fit next to the full ones
             let container_vec_capacity = 8;
-            let mut options = Vec::with_capacity(container_vec_capacity);
+            let mut options: Vec<ContainerOption> = Vec::with_capacity(container_vec_capacity);
             for empty_20 in 0..(truck.get_num_20() + 1) {
                 for empty_40 in 0..(truck.get_num_40() + 1) {
                     let num_20 = org_full_20 + empty_20;
@@ -1069,14 +1074,14 @@ mod solver_data {
                             //decide what to do with the option
                             let len_before = options.len();
                             options
-                                .retain(|&x| !new_option.comparable_and_completely_superior_to(x));
+                                .retain(|x| !new_option.comparable_and_completely_superior_to(&x));
                             if len_before != options.len() {
                                 //something was removed for being completely inferior to new_option, add new_option
                                 options.push(new_option);
                             } else {
-                                let no_reason_against_adding = true;
+                                let mut no_reason_against_adding = true;
                                 for option in &options {
-                                    if option.at_least_as_good_as(new_option) {
+                                    if option.at_least_as_good_as(&new_option) {
                                         no_reason_against_adding = false;
                                         break;
                                     }
@@ -1208,27 +1213,27 @@ mod solver_data {
     impl ContainerOption {
         ///Checks whether `empty_20` and `empty_40` are identical. `num_20` and `num_40` are not checked because their equivalence should always follow
         /// from the first comparison in the context where this function is called.
-        pub fn comparable_to(&self, &other: ContainerOption) -> bool {
+        pub fn comparable_to(&self, other: &ContainerOption) -> bool {
             return self.empty_20 == other.empty_20 && self.empty_40 == other.empty_40;
         }
         ///Returns whether `self` is superior to `other` in at least one regard. Does not check whether they are comparable in the first place.
-        pub fn partially_superior_to(&self, &other: ContainerOption) -> bool {
+        pub fn partially_superior_to(&self, other: &ContainerOption) -> bool {
             return self.last_loading_distance < other.last_loading_distance
                 || !other.covers_completely(self);
         }
         ///Returns whether `self` is at least as good as `other` in every regard. Does not check whether they are comparable in the first place.
-        pub fn at_least_as_good_as(&self, &other: ContainerOption) -> bool {
+        pub fn at_least_as_good_as(&self, other: &ContainerOption) -> bool {
             return self.last_loading_distance <= other.last_loading_distance
                 && self.covers_completely(other);
         }
 
-        pub fn comparable_and_completely_superior_to(&self, &other: ContainerOption) -> bool {
+        pub fn comparable_and_completely_superior_to(&self, other: &ContainerOption) -> bool {
             return self.comparable_to(other)
                 && self.partially_superior_to(other)
                 && self.at_least_as_good_as(other);
         }
-        fn covers_completely(&self, &other: CombinationOption) -> bool {
-            let difference = self.compatible_path_options ^ other.previous_compatible_path_options;
+        fn covers_completely(&self, other: &ContainerOption) -> bool {
+            let difference = self.compatible_path_options ^ other.compatible_path_options;
             let bits_only_in_other = difference & self.compatible_path_options;
             return bits_only_in_other == 0;
         }
