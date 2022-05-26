@@ -126,6 +126,9 @@ impl Config {
     pub fn get_initial_depot_service_time(&self) -> u32 {
         return self.depot_service_time;
     }
+    pub fn get_subsequent_depot_service_time(&self) -> u32 {
+        return 10;
+    }
     pub fn get_service_time_at_request_node(&self, request_node: usize) -> u32 {
         return self.service_times[request_node - 1];
     }

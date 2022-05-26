@@ -418,7 +418,7 @@ mod solver_data {
             //calculate new total_time, dealing with handling and refueling times
             let mut total_time = self.total_time + config.get_time_between(from, to);
             //service time, always applied first, loading_distance only != 0 for fill_with_previous_path_options
-            total_time += config.get_initial_depot_service_time() * loading_distance;
+            total_time += config.get_subsequent_depot_service_time() * loading_distance;
             //request handling times
             if to < config.get_first_afs() {
                 //not an AFS, either depot or
@@ -589,7 +589,7 @@ mod solver_data {
                     //nothing requires this loading distance anyway, so no need to even consider this case
                     continue;
                 }
-                //represents all the containers that would be compatible (loading_distance and lower)
+                //represents all the container_options that would be compatible (loading_distance and lower)
                 let mut base_key = 0;
                 for i in 0..(loading_distance + 1) {
                     base_key |= loading_array[i as usize];
@@ -597,7 +597,7 @@ mod solver_data {
                 for (option_index, option) in current_state.path_options.iter().enumerate() {
                     let from = option.get_current_node();
                     //remove the ones not compatible with this specific PathOption
-                    let mut compatible_container_options = base_key;
+                    let mut compatible_container_options = base_key; //done to avoid recalculating base_key
                     for container_index in 0..container_options_at_node.len() {
                         if PathOption::decode_loading_mask(
                             compatible_container_options,
@@ -608,13 +608,14 @@ mod solver_data {
                         ) {
                             //option would be compatible with this loading_distance,
                             //but the PathOption used as a starting point is not compatible with the previous ContainerOption
-                            //so set the distance_key for this ContainerOption to false
+                            //so set the value for this ContainerOption to false
                             compatible_container_options = PathOption::remove_index_from_mask(
                                 compatible_container_options,
                                 container_index,
                             );
                         }
                     }
+                    //routing options
                     //to target node
                     option.possibly_add_to_path_options(
                         option_index,
@@ -1184,7 +1185,7 @@ mod solver_data {
         }
 
         ///Returns `(load_0, load_1, load_2)`. Each of these encodes the following: The `n`th bit from the right is one, if the `ContainerOption`
-        /// at index `n` has a `last_loading_time` of this value (e.g. 0 for `load_0`)
+        /// at index `n` has a `last_loading_distance` of this value (e.g. 0 for `load_0`)
         fn get_container_masks(container_options_at_node: &Vec<ContainerOption>) -> [u32; 3] {
             let mut loading_array = [0, 0, 0];
             for index in 0..container_options_at_node.len() {
