@@ -1029,50 +1029,63 @@ mod solver_data {
             let org_full_20 = self.container_options[0].num_20 - self.container_options[0].empty_20;
             let org_full_40 = self.container_options[0].num_40 - self.container_options[0].empty_40;
             //iterate over possible combinations of empty containers and see whether they fit next to the full ones
-            let container_vec_capacity = 2
-                ^ (truck.get_num_20() + truck.get_num_40()) as usize - self.container_options.len();
+            let container_vec_capacity = 8;
             let mut options = Vec::with_capacity(container_vec_capacity);
             for empty_20 in 0..(truck.get_num_20() + 1) {
                 for empty_40 in 0..(truck.get_num_40() + 1) {
                     let num_20 = org_full_20 + empty_20;
                     let num_40 = org_full_40 + empty_40;
                     if num_20 > truck.get_num_20() || num_40 > truck.get_num_40() {
-                        //invalid loading
+                        //invalid loading, no point in trying this out
                         continue;
                     }
-                    let mut previous_index = 0;
-                    let mut previous_loading_distance = 100; //impossibly high start value that gets overwritten
-                    let mut already_existing = false;
-                    for index in 0..self.container_options.len() {
-                        let existing_option = &self.container_options[index];
-                        //comparing these is sufficient, num_20 and num_40 are the result of combining with org_full_20
-                        if (empty_20 == existing_option.empty_20)
-                            && (empty_40 == existing_option.empty_40)
+                    //if such a `ContainerOption` already exists, there is no point in adding it - if possible, loading a container earlier
+                    //is at least as good as loading it later
+                    let mut add = true;
+                    for existing_option in &self.container_options {
+                        if existing_option.empty_20 == empty_20
+                            && existing_option.empty_40 == empty_40
                         {
-                            //loading already existed beforehand
-                            already_existing = true;
-                            continue; //no need to continue
-                        }
-                        //how many containers need to be changed, the existing_option with the lowest value should be preferred
-                        //all else being equal, loading container earlier is always better as the time taken may disappear in an earliest_visiting_time
-                        //there is never an advantage to loading a container later that could have been loaded earlier
-                        let loading_distance = (empty_20 - existing_option.empty_20).abs()
-                            + (empty_40 - existing_option.empty_40).abs();
-                        if loading_distance < previous_loading_distance {
-                            previous_loading_distance = loading_distance;
-                            previous_index = index;
+                            add = false;
+                            break;
                         }
                     }
-                    //loading is valid and did not exist beforehand
-                    if !already_existing {
-                        options.push(ContainerOption {
-                            empty_20,
-                            empty_40,
-                            num_20,
-                            num_40,
-                            previous_index,
-                            last_loading_distance: previous_loading_distance,
-                        });
+                    if add {
+                        for previous_index in 0..self.container_options.len() {
+                            //for each possible predecessor, create its successor
+                            let previous_option = &self.container_options[previous_index];
+                            let compatible_path_options = previous_option.compatible_path_options;
+                            let last_loading_distance = (empty_20 - previous_option.empty_20).abs()
+                                + (empty_40 - previous_option.empty_40).abs();
+                            let new_option = ContainerOption {
+                                empty_20,
+                                empty_40,
+                                num_20,
+                                num_40,
+                                previous_index,
+                                last_loading_distance,
+                                compatible_path_options, //at this point, it is the value from the previous `ContainerOption`, overwritten later
+                            };
+                            //decide what to do with the option
+                            let len_before = options.len();
+                            options
+                                .retain(|&x| !new_option.comparable_and_completely_superior_to(x));
+                            if len_before != options.len() {
+                                //something was removed for being completely inferior to new_option, add new_option
+                                options.push(new_option);
+                            } else {
+                                let no_reason_against_adding = true;
+                                for option in &options {
+                                    if option.at_least_as_good_as(new_option) {
+                                        no_reason_against_adding = false;
+                                        break;
+                                    }
+                                }
+                                if no_reason_against_adding {
+                                    options.push(new_option);
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -1185,8 +1198,40 @@ mod solver_data {
         num_40: i8,
         ///the index of the previous `ContainerNumber` option
         previous_index: usize,
-        ///the number of containers that were unloaded the last time the depot was visited. May be 0,1 or 2, no other values possible
+        ///the number of containers that were unloaded the last time the depot was visited. May be 0,1 or 2, no other values possible.
+        /// Summary metric, lower is better
         last_loading_distance: i8,
+        ///the `path_options` at the previous `SearchState` that are compatible with `self`. Summary metric
+        compatible_path_options: u32,
+    }
+
+    impl ContainerOption {
+        ///Checks whether `empty_20` and `empty_40` are identical. `num_20` and `num_40` are not checked because their equivalence should always follow
+        /// from the first comparison in the context where this function is called.
+        pub fn comparable_to(&self, &other: ContainerOption) -> bool {
+            return self.empty_20 == other.empty_20 && self.empty_40 == other.empty_40;
+        }
+        ///Returns whether `self` is superior to `other` in at least one regard. Does not check whether they are comparable in the first place.
+        pub fn partially_superior_to(&self, &other: ContainerOption) -> bool {
+            return self.last_loading_distance < other.last_loading_distance
+                || !other.covers_completely(self);
+        }
+        ///Returns whether `self` is at least as good as `other` in every regard. Does not check whether they are comparable in the first place.
+        pub fn at_least_as_good_as(&self, &other: ContainerOption) -> bool {
+            return self.last_loading_distance <= other.last_loading_distance
+                && self.covers_completely(other);
+        }
+
+        pub fn comparable_and_completely_superior_to(&self, &other: ContainerOption) -> bool {
+            return self.comparable_to(other)
+                && self.partially_superior_to(other)
+                && self.at_least_as_good_as(other);
+        }
+        fn covers_completely(&self, &other: CombinationOption) -> bool {
+            let difference = self.compatible_path_options ^ other.previous_compatible_path_options;
+            let bits_only_in_other = difference & self.compatible_path_options;
+            return bits_only_in_other == 0;
+        }
     }
 }
 use solver_data::*;
