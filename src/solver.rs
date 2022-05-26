@@ -569,7 +569,7 @@ mod solver_data {
         }
 
         ///Decodes the binary encoded mask, returning `true` if this `index` is set to 1/true
-        fn is_container_compatible(mask: u32, index: usize) -> bool {
+        fn decode_loading_mask(mask: u32, index: usize) -> bool {
             let index_mask = 1 << index;
             return (mask & index_mask) != 0;
         }
@@ -606,10 +606,10 @@ mod solver_data {
                     //remove the ones not compatible with this specific PathOption
                     let mut compatible_container_options = base_key; //done to avoid recalculating base_key
                     for container_index in 0..container_options_at_node.len() {
-                        if PathOption::is_container_compatible(
+                        if PathOption::decode_loading_mask(
                             compatible_container_options,
                             container_index,
-                        ) && !PathOption::is_container_compatible(
+                        ) && !PathOption::decode_loading_mask(
                             path_option.summary.compatible_container_options,
                             container_options_at_node[container_index].previous_index,
                         ) {
@@ -911,7 +911,7 @@ mod solver_data {
             for (container_index, container_option) in container_options.iter_mut().enumerate() {
                 container_option.compatible_path_options = 0;
                 for (path_index, path_option) in path_options.iter().enumerate() {
-                    if PathOption::is_container_compatible(
+                    if PathOption::decode_loading_mask(
                         path_option.summary.compatible_container_options,
                         container_index,
                     ) {
