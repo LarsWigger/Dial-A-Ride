@@ -175,7 +175,7 @@ mod solver_data {
         /// - the route in `search_state` for its `requests_visited` is better than the one already known
         pub fn possibly_add(&mut self, search_state: &Rc<SearchState>) {
             self.valid_insertions += 1;
-            let requests_visited = search_state.requests_visisted;
+            let requests_visited = search_state.requests_visited;
             let (best_path_index, total_distance) =
                 search_state.get_best_path_index_and_total_distance();
             let previous_entry = self.map.get(&requests_visited);
@@ -780,7 +780,7 @@ mod solver_data {
         full_request_1_source: usize,
         full_request_2_source: usize,
         ///the requests that have been visited so far, binary encoding for efficiency
-        requests_visisted: u64,
+        requests_visited: u64,
         ///the next state after this one, may or may not exist and may be overwritten later
         previous_state: Option<Rc<SearchState>>,
     }
@@ -848,13 +848,15 @@ mod solver_data {
                     path_options.push(new_option);
                 }
             }
+            let container_options =
+                SearchState::update_container_options_with_paths(container_options, &path_options);
             let search_state = SearchState {
                 current_node: 0,
                 path_options,
                 container_options,
                 full_request_1_source: 0,
                 full_request_2_source: 0,
-                requests_visisted: 0,
+                requests_visited: 0,
                 previous_state: Option::None,
             };
             return Rc::new(search_state);
@@ -873,13 +875,17 @@ mod solver_data {
             let new_state_reference = Rc::clone(&current_state);
             let (full_request_1_source, full_request_2_source) =
                 current_state.get_container_sources_at_arrival(config, current_node);
+            let container_options = SearchState::update_container_options_with_paths(
+                container_options_at_node,
+                &path_options,
+            );
             let mut new_state = SearchState {
                 current_node,
                 path_options,
-                container_options: container_options_at_node,
+                container_options,
                 full_request_1_source,
                 full_request_2_source,
-                requests_visisted: current_state.requests_visisted,
+                requests_visited: current_state.requests_visited,
                 previous_state: Option::Some(new_state_reference),
             };
             if current_node != 0 {
@@ -887,6 +893,25 @@ mod solver_data {
                 new_state.set_request_visited(current_node);
             }
             return Rc::new(new_state);
+        }
+
+        ///Changes `ContainerOption.compatible_path_options` to match `path_options`
+        fn update_container_options_with_paths(
+            mut container_options: Vec<ContainerOption>,
+            path_options: &Vec<Rc<PathOption>>,
+        ) -> Vec<ContainerOption> {
+            for (container_index, container_option) in container_options.iter_mut().enumerate() {
+                container_option.compatible_path_options = 0;
+                for (path_index, path_option) in path_options.iter().enumerate() {
+                    if PathOption::decode_loading_mask(
+                        path_option.summary.compatible_container_options,
+                        container_index,
+                    ) {
+                        container_option.set_compatible(path_index);
+                    }
+                }
+            }
+            return container_options;
         }
 
         ///Returns `(full_request_1_source, full_request_2_source)` as it will be upon arrival at at `node`
@@ -1106,7 +1131,7 @@ mod solver_data {
             );
             //request binary is all 0 with 1 at the request index from the right
             let request_binary: u64 = 1 << (request_node - 1);
-            let request_result = self.requests_visisted & request_binary;
+            let request_result = self.requests_visited & request_binary;
             return request_result != 0;
         }
 
@@ -1115,7 +1140,7 @@ mod solver_data {
             assert!(request_node != 0 && request_node < 64);
             //request binary is all 0 with 1 at the request index from the right
             let request_binary: u64 = 1 << (request_node - 1);
-            self.requests_visisted = self.requests_visisted | request_binary;
+            self.requests_visited = self.requests_visited | request_binary;
         }
 
         /// Calculates all the relevant routes from `current_state` to the target node and returns the next `SearchState` already wrapped in `Rc`.
@@ -1192,6 +1217,7 @@ mod solver_data {
     }
 
     ///Combines all the data about the current state of loaded containers for a `SearchState`
+    #[derive(Clone, Copy)]
     pub struct ContainerOption {
         ///number of empty 20 foot containers loaded
         empty_20: i8,
@@ -1236,6 +1262,11 @@ mod solver_data {
             let difference = self.compatible_path_options ^ other.compatible_path_options;
             let bits_only_in_other = difference & self.compatible_path_options;
             return bits_only_in_other == 0;
+        }
+        fn set_compatible(mut self, path_index: usize) {
+            assert!(path_index < 32);
+            let mask = 1 << path_index;
+            self.compatible_path_options |= mask;
         }
     }
 }
