@@ -622,6 +622,10 @@ mod solver_data {
                             );
                         }
                     }
+                    if compatible_container_options == 0 {
+                        //no ContainerOption is compatible with any PathOption starting from this path_option, no need to continue
+                        continue;
+                    }
                     //routing options
                     //to target node
                     path_option.possibly_add_to_path_options(
@@ -811,7 +815,7 @@ mod solver_data {
                         num_20: empty_20,
                         num_40: empty_40,
                         previous_index: 0,
-                        last_loading_distance: empty_20 + empty_40,
+                        depot_loading_distance: empty_20 + empty_40,
                         compatible_path_options: 0, //overwritten later
                         alive: true,
                     });
@@ -980,7 +984,7 @@ mod solver_data {
                         num_20,
                         num_40,
                         previous_index,
-                        last_loading_distance: previous_container_option.last_loading_distance,
+                        depot_loading_distance: 0,
                         compatible_path_options: 0, //overwritten later
                         alive: previous_container_option.alive,
                     });
@@ -1003,7 +1007,7 @@ mod solver_data {
                         num_20,
                         num_40,
                         previous_index,
-                        last_loading_distance: previous_container_option.last_loading_distance,
+                        depot_loading_distance: 0,
                         compatible_path_options: 0, //overwritten later
                         alive: previous_container_option.alive,
                     });
@@ -1027,7 +1031,7 @@ mod solver_data {
                         num_20,
                         num_40,
                         previous_index,
-                        last_loading_distance: previous_container_option.last_loading_distance,
+                        depot_loading_distance: 0,
                         compatible_path_options: 0, //overwritten later
                         alive: previous_container_option.alive,
                     });
@@ -1051,7 +1055,7 @@ mod solver_data {
                         num_20,
                         num_40,
                         previous_index,
-                        last_loading_distance: previous_container_option.last_loading_distance,
+                        depot_loading_distance: 0,
                         compatible_path_options: 0, //overwritten later
                         alive: previous_container_option.alive,
                     });
@@ -1098,7 +1102,7 @@ mod solver_data {
                                 num_20,
                                 num_40,
                                 previous_index: existing_index,
-                                last_loading_distance: 0,
+                                depot_loading_distance: 0, //no change here
                                 compatible_path_options: existing_option.compatible_path_options, //overwritten later
                                 alive: false, //mark as dead, only to notify during further loadings that this should not be loaded anew
                             });
@@ -1110,7 +1114,8 @@ mod solver_data {
                         {
                             //for each possible predecessor, create its successor
                             let compatible_path_options = previous_option.compatible_path_options;
-                            let last_loading_distance = (empty_20 - previous_option.empty_20).abs()
+                            let depot_loading_distance = (empty_20 - previous_option.empty_20)
+                                .abs()
                                 + (empty_40 - previous_option.empty_40).abs();
                             let new_option = ContainerOption {
                                 empty_20,
@@ -1118,7 +1123,7 @@ mod solver_data {
                                 num_20,
                                 num_40,
                                 previous_index,
-                                last_loading_distance,
+                                depot_loading_distance,
                                 compatible_path_options, //at this point, it is the value from the previous `ContainerOption`, overwritten later
                                 alive: true, //could not be reached without this stop, important
                             };
@@ -1220,7 +1225,7 @@ mod solver_data {
                 let option = &container_options_at_node[index];
                 //key is 1 at the corresponding index
                 let key = 1 << index;
-                loading_array[option.last_loading_distance as usize] |= key;
+                loading_array[option.depot_loading_distance as usize] |= key;
             }
             return loading_array;
         }
@@ -1259,7 +1264,7 @@ mod solver_data {
         previous_index: usize,
         ///the number of containers that were unloaded the last time the depot was visited. May be 0,1 or 2, no other values possible.
         /// Summary metric, lower is better
-        last_loading_distance: i8,
+        depot_loading_distance: i8,
         ///the `path_options` at the previous `SearchState` that are compatible with `self`. Summary metric
         compatible_path_options: u128,
         ///if `true`, this `ContainerOption` is still important on this path, otherwise it is just a placeholder
@@ -1275,12 +1280,12 @@ mod solver_data {
         }
         ///Returns whether `self` is superior to `other` in at least one regard. Does not check whether they are comparable in the first place.
         pub fn partially_superior_to(&self, other: &ContainerOption) -> bool {
-            return self.last_loading_distance < other.last_loading_distance
+            return self.depot_loading_distance < other.depot_loading_distance
                 || !other.covers_completely(self);
         }
         ///Returns whether `self` is at least as good as `other` in every regard. Does not check whether they are comparable in the first place.
         pub fn at_least_as_good_as(&self, other: &ContainerOption) -> bool {
-            return self.last_loading_distance <= other.last_loading_distance
+            return self.depot_loading_distance <= other.depot_loading_distance
                 && self.covers_completely(other);
         }
 
