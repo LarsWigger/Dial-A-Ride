@@ -428,7 +428,9 @@ mod solver_data {
                         //too early, just wait
                         total_time = config.get_earliest_visiting_time_at_request_node(to)
                     }
-                    assert!(loading_distance < 2);
+                    if loading_distance != 1 {
+                        println!("Should not happen");
+                    }
                     total_time += config.get_service_time_at_request_node(to);
                 } else if depot_refuel {
                     total_time += truck.get_minutes_for_refueling(self.fuel_level);
@@ -531,6 +533,7 @@ mod solver_data {
             node: usize,
             depot_refuel: bool,
             new_path: bool,
+            iteration_queue: Option<&mut Vec<Rc<PathOption>>>,
         ) {
             let new_summary = match new_summary {
                 Option::None => return,
@@ -542,13 +545,18 @@ mod solver_data {
             path_options.retain(|option| !option.completely_inferior_to(&new_summary, node));
             if original_length != path_options.len() {
                 //something was removed => completely superior to something => insert, done
-                path_options.push(self.create_next_option(
+                let next_option = self.create_next_option(
                     previous_index,
                     new_summary,
                     node,
                     depot_refuel,
                     new_path,
-                ));
+                );
+                match iteration_queue {
+                    Option::None => (),
+                    Option::Some(queue) => queue.push(Rc::clone(&next_option)),
+                }
+                path_options.push(next_option);
             } else {
                 //check whether there is a reason against adding the new_option
                 for i in 0..path_options.len() {
@@ -560,13 +568,18 @@ mod solver_data {
                     }
                 }
                 //no reason against insertion found
-                path_options.push(self.create_next_option(
+                let next_option = self.create_next_option(
                     previous_index,
                     new_summary,
                     node,
                     depot_refuel,
                     new_path,
-                ));
+                );
+                match iteration_queue {
+                    Option::None => (),
+                    Option::Some(queue) => queue.push(Rc::clone(&next_option)),
+                }
+                path_options.push(next_option);
             }
         }
 
@@ -590,46 +603,41 @@ mod solver_data {
             current_state: &Rc<SearchState>,
             node: usize,
             path_options: &mut Vec<Rc<PathOption>>,
-            container_options_at_node: &Vec<ContainerOption>,
+            container_options: &Vec<ContainerOption>,
         ) {
-            let loading_array = SearchState::get_container_masks(container_options_at_node);
-            for loading_distance in (0_u32..3).rev() {
-                if loading_array[loading_distance as usize] == 0 {
-                    //nothing requires this loading distance anyway, so no need to even consider this case
-                    continue;
-                }
-                //represents all the container_options that would be compatible (loading_distance and lower)
-                let mut base_key = 0;
-                for i in 0..(loading_distance + 1) {
-                    base_key |= loading_array[i as usize];
-                }
-                for (path_index, path_option) in current_state.path_options.iter().enumerate() {
-                    let from = path_option.get_current_node();
-                    //remove the ones not compatible with this specific PathOption
-                    let mut compatible_container_options = base_key; //done to avoid recalculating base_key
-                    for container_index in 0..container_options_at_node.len() {
-                        if PathOption::decode_loading_mask(
-                            compatible_container_options,
-                            container_index,
-                        ) && !PathOption::decode_loading_mask(
-                            path_option.summary.compatible_container_options,
-                            container_options_at_node[container_index].previous_index,
-                        ) {
-                            //option would be compatible with this loading_distance,
-                            //but the PathOption used as a starting point is not compatible with the previous ContainerOption
-                            //so set the value for this ContainerOption to false
-                            compatible_container_options = PathOption::remove_index_from_mask(
-                                compatible_container_options,
-                                container_index,
-                            );
-                        }
+            //calculation needed only once
+            let loading_array = SearchState::get_container_masks(container_options);
+            for (path_index, path_option) in current_state.path_options.iter().enumerate() {
+                let from = path_option.get_current_node();
+                //the containers this `PathOption` might be compatible with - number might get reduced because of
+                let mut compatible_container_options = 0;
+                for (container_index, container_option) in container_options.iter().enumerate() {
+                    if PathOption::decode_loading_mask(
+                        path_option.summary.compatible_container_options,
+                        path_option.previous_index,
+                    ) {
+                        //a PathOption starting from path_option might be compatible with container_option, so set it
+                        let change = 1 << container_index;
+                        compatible_container_options |= change;
                     }
-                    if compatible_container_options == 0 {
-                        //no ContainerOption is compatible with any PathOption starting from this path_option, no need to continue
+                }
+                //target node, loading_distance needs to be applied here
+                for loading_distance in (0_u32..3).rev() {
+                    //determine compatibility after applying loading_distance
+                    if loading_array[loading_distance as usize] == 0 {
+                        //nothing requires this loading distance anyway, so no need to even consider this case
                         continue;
                     }
-                    //routing options
-                    //to target node
+                    let mut loading_compatible = 0;
+                    for i in 0..(loading_distance + 1) {
+                        loading_compatible |= loading_array[i as usize];
+                    }
+                    //compatible with both the loading_distance and the starting PathOption
+                    loading_compatible &= compatible_container_options;
+                    if loading_compatible == 0 {
+                        //PathOption would be useless anyway. Also needed to ensure that routes terminate
+                        continue;
+                    }
                     path_option.possibly_add_to_path_options(
                         path_index,
                         path_options,
@@ -639,33 +647,17 @@ mod solver_data {
                             from,
                             node,
                             false,
-                            compatible_container_options,
+                            loading_compatible,
                             loading_distance,
                         ),
                         node,
                         false,
                         true,
+                        Option::None,
                     );
-                    //fuel stations
-                    for afs in config.get_first_afs()..config.get_dummy_depot() {
-                        path_option.possibly_add_to_path_options(
-                            path_index,
-                            path_options,
-                            path_option.summary.next_summary(
-                                config,
-                                truck,
-                                from,
-                                afs,
-                                false,
-                                compatible_container_options,
-                                loading_distance,
-                            ),
-                            afs,
-                            false,
-                            true,
-                        );
-                    }
-                    //depot refueling
+                }
+                //fuel stations
+                for afs in config.get_first_afs()..config.get_dummy_depot() {
                     path_option.possibly_add_to_path_options(
                         path_index,
                         path_options,
@@ -673,20 +665,35 @@ mod solver_data {
                             config,
                             truck,
                             from,
-                            0,
-                            true,
+                            afs,
+                            false,
                             compatible_container_options,
-                            loading_distance,
+                            0, //no loading done anyway, irrelevant
                         ),
-                        0,
+                        afs,
+                        false,
                         true,
-                        true,
+                        Option::None,
                     );
                 }
-                if config.get_initial_depot_service_time() == 0 {
-                    //speedup in case the other loops would be effectively identical/yield only inferior results
-                    return;
-                }
+                //depot refueling
+                path_option.possibly_add_to_path_options(
+                    path_index,
+                    path_options,
+                    path_option.summary.next_summary(
+                        config,
+                        truck,
+                        from,
+                        0,
+                        true,
+                        compatible_container_options,
+                        0, //no loading done anyway, irrelevant
+                    ),
+                    0,
+                    true,
+                    true,
+                    Option::None,
+                );
             }
         }
 
@@ -694,79 +701,102 @@ mod solver_data {
         fn fill_with_following_paths(
             config: &Config,
             truck: &Truck,
-            node: usize,
+            destination_node: usize,
             path_options: &mut Vec<Rc<PathOption>>,
+            container_options: &Vec<ContainerOption>,
         ) {
+            //avoid repeating actions using a separate queue for what still has to be processed
             let mut iteration_queue = Vec::with_capacity(path_options.capacity());
             for index in 0..path_options.len() {
                 let option = Rc::clone(&path_options[index]);
                 iteration_queue.push(option);
             }
+            let loading_array = SearchState::get_container_masks(container_options);
             while iteration_queue.len() != 0 {
-                let option = iteration_queue.swap_remove(0);
-                if Rc::strong_count(&option) == 1 {
+                let path_option = iteration_queue.swap_remove(0);
+                if Rc::strong_count(&path_option) == 1 {
                     //this is the only remaining pointer, meaning that it was removed from path_options. No reason to continue with this element
                     continue;
                 }
                 //save for repeated usage:
-                let current_node = option.get_current_node();
+                let from = path_option.get_current_node();
                 //going away from the target node is both forbidden and pointless
-                if current_node != node {
-                    //straight to target node
-                    option.possibly_add_to_path_options(
-                        option.previous_index,
-                        path_options,
-                        option.summary.next_summary(
-                            config,
-                            truck,
-                            current_node,
-                            node,
+                if from != destination_node {
+                    //target node, loading_distance needs to be applied here
+                    for loading_distance in (0_u32..3).rev() {
+                        //determine compatibility after applying loading_distance
+                        if loading_array[loading_distance as usize] == 0 {
+                            //nothing requires this loading distance anyway, so no need to even consider this case
+                            continue;
+                        }
+                        let mut loading_compatible = 0;
+                        for i in 0..(loading_distance + 1) {
+                            loading_compatible |= loading_array[i as usize];
+                        }
+                        //compatible with both the loading_distance and the starting PathOption
+                        loading_compatible &= path_option.summary.compatible_container_options;
+                        if loading_compatible == 0 {
+                            //PathOption would be useless anyway. Also needed to ensure that routes terminate
+                            continue;
+                        }
+                        path_option.possibly_add_to_path_options(
+                            path_option.previous_index,
+                            path_options,
+                            path_option.summary.next_summary(
+                                config,
+                                truck,
+                                from,
+                                destination_node,
+                                false,
+                                loading_compatible,
+                                loading_distance,
+                            ),
+                            destination_node,
                             false,
-                            option.summary.compatible_container_options,
-                            0,
-                        ),
-                        node,
-                        false,
-                        false,
-                    );
+                            false,
+                            Option::Some(&mut iteration_queue),
+                        );
+                    }
                     //refuel at a particular AFS
                     for afs in config.get_first_afs()..config.get_dummy_depot() {
                         //routing from itself to itself is completely pointless
-                        if current_node != afs {
-                            option.possibly_add_to_path_options(
-                                option.previous_index,
+                        if from != afs {
+                            path_option.possibly_add_to_path_options(
+                                path_option.previous_index,
                                 path_options,
-                                option.summary.next_summary(
+                                path_option.summary.next_summary(
                                     config,
                                     truck,
-                                    current_node,
+                                    from,
                                     afs,
                                     false,
-                                    option.summary.compatible_container_options,
+                                    path_option.summary.compatible_container_options,
                                     0,
                                 ),
                                 afs,
                                 false,
                                 false,
+                                Option::Some(&mut iteration_queue),
                             );
                         }
                     }
                     //refuel at depot
-                    option.possibly_add_to_path_options(
-                        option.previous_index,
+                    path_option.possibly_add_to_path_options(
+                        path_option.previous_index,
                         path_options,
-                        option.summary.next_summary(
+                        path_option.summary.next_summary(
                             config,
                             truck,
-                            current_node,
+                            from,
                             0,
                             true,
-                            option.summary.compatible_container_options,
+                            path_option.summary.compatible_container_options,
                             0,
                         ),
                         0,
                         true,
                         false,
+                        Option::Some(&mut iteration_queue),
                     );
                 }
             }
@@ -912,21 +942,26 @@ mod solver_data {
 
         ///Changes `ContainerOption.compatible_path_options` to match `path_options`
         fn update_container_options_with_paths(
-            mut container_options: Vec<ContainerOption>,
+            container_options: Vec<ContainerOption>,
             path_options: &Vec<Rc<PathOption>>,
         ) -> Vec<ContainerOption> {
-            for (container_index, container_option) in container_options.iter_mut().enumerate() {
-                container_option.compatible_path_options = 0;
+            //the borrow checker hates me, so I can't just change the existing data
+            let mut new_vec = Vec::with_capacity(container_options.len());
+            for (container_index, container_option) in container_options.iter().enumerate() {
+                let mut copy = container_option.clone();
+                copy.compatible_path_options = 0;
                 for (path_index, path_option) in path_options.iter().enumerate() {
                     if PathOption::decode_loading_mask(
                         path_option.summary.compatible_container_options,
                         container_index,
                     ) {
-                        container_option.set_compatible(path_index);
+                        let change = 1 << path_index;
+                        copy.compatible_path_options |= change;
                     }
                 }
+                new_vec.push(copy);
             }
-            return container_options;
+            return new_vec;
         }
 
         ///Returns `(full_request_1_source, full_request_2_source)` as it will be upon arrival at at `node`
@@ -1184,7 +1219,7 @@ mod solver_data {
             truck: &Truck,
             current_state: &Rc<SearchState>,
             node: usize,
-            container_options_at_node: Vec<ContainerOption>,
+            container_options: Vec<ContainerOption>,
         ) -> Option<Rc<SearchState>> {
             assert_ne!(current_state.current_node, node);
             //TODO: calculate a more realistic size, there is a maximum number of elements that can be calculated
@@ -1197,10 +1232,16 @@ mod solver_data {
                 current_state,
                 node,
                 &mut path_options,
-                &container_options_at_node,
+                &container_options,
             );
             //second step, try using previously found path_options to find a better path to somewhere (not only the depot)
-            PathOption::fill_with_following_paths(config, truck, node, &mut path_options);
+            PathOption::fill_with_following_paths(
+                config,
+                truck,
+                node,
+                &mut path_options,
+                &container_options,
+            );
             //third step, remove anything that does not end at the target node
             path_options.retain(|option| option.get_current_node() == node);
             if path_options.len() == 0 {
@@ -1212,18 +1253,17 @@ mod solver_data {
                     truck,
                     current_state,
                     path_options,
-                    container_options_at_node,
+                    container_options,
                 ));
             }
         }
 
         ///Returns `(load_0, load_1, load_2)`. Each of these encodes the following: The `n`th bit from the right is one, if the `ContainerOption`
         /// at index `n` has a `last_loading_distance` of this value (e.g. 0 for `load_0`)
-        fn get_container_masks(container_options_at_node: &Vec<ContainerOption>) -> [u32; 3] {
+        fn get_container_masks(container_options: &Vec<ContainerOption>) -> [u32; 3] {
             let mut loading_array = [0, 0, 0];
-            for index in 0..container_options_at_node.len() {
-                assert!(index < 32, "More than 8 ContainerOptions!");
-                let option = &container_options_at_node[index];
+            for (index, option) in container_options.iter().enumerate() {
+                assert!(index < 32, "More than 32 ContainerOptions!");
                 //key is 1 at the corresponding index
                 let key = 1 << index;
                 loading_array[option.loading_distance as usize] |= key;
@@ -1303,6 +1343,7 @@ mod solver_data {
             assert!(path_index < 128);
             let mask = 1 << path_index;
             self.compatible_path_options |= mask;
+            println!("New mask: {}", self.compatible_path_options);
         }
     }
 }
