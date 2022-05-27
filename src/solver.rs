@@ -426,11 +426,9 @@ mod solver_data {
                         return Option::None;
                     } else if total_time < config.get_earliest_visiting_time_at_request_node(to) {
                         //too early, just wait
-                        total_time = config.get_earliest_visiting_time_at_request_node(to)
+                        total_time = config.get_earliest_visiting_time_at_request_node(to);
                     }
-                    if loading_distance != 1 {
-                        println!("Should not happen");
-                    }
+                    assert!(loading_distance == 1);
                     total_time += config.get_service_time_at_request_node(to);
                 } else if depot_refuel {
                     total_time += truck.get_minutes_for_refueling(self.fuel_level);
