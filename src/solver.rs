@@ -368,20 +368,20 @@ mod solver_data {
             let fuel_level = self.fuel_level - fuel_needed;
             //calculate new total_time, dealing with handling and refueling times
             let mut total_time = self.total_time + config.get_time_between(from, to);
+            if depot_service {
+                //technically, this should be added before the traversal but it does not matter here
+                total_time += config.get_subsequent_depot_service_time();
+            }
             //request handling times
-            if to < config.get_first_afs() {
-                if to != 0 {
-                    if total_time > config.get_latest_visiting_time_at_request_node(to) {
-                        //too late, impossible
-                        return None;
-                    } else if total_time < config.get_earliest_visiting_time_at_request_node(to) {
-                        //too early, just wait
-                        total_time = config.get_earliest_visiting_time_at_request_node(to)
-                    }
-                    total_time += config.get_service_time_at_request_node(to);
-                } else if depot_service {
-                    total_time += config.get_subsequent_depot_service_time();
+            if to < config.get_first_afs() && to != 0 {
+                if total_time > config.get_latest_visiting_time_at_request_node(to) {
+                    //too late, impossible
+                    return None;
+                } else if total_time < config.get_earliest_visiting_time_at_request_node(to) {
+                    //too early, just wait
+                    total_time = config.get_earliest_visiting_time_at_request_node(to);
                 }
+                total_time += config.get_service_time_at_request_node(to);
             }
             //t_max applies to every type of node, including AFS and the depot
             if total_time > config.get_t_max() {
@@ -722,7 +722,7 @@ mod solver_data {
             path_options: &mut Vec<Rc<PathOption>>,
         ) {
             let initial_state;
-            let depot_service;
+            let depot_service; //whether the depot was loaded before, so now a service time needs to be added
             if current_state.was_depot_loaded() {
                 initial_state = match &current_state.previous_state {
                     Option::None => panic!("SHOULD NEVER HAPPEN!"),
