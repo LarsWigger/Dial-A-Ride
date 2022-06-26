@@ -951,17 +951,21 @@ mod solver_data {
             let mut empty_20_delivery = 0;
             let mut empty_40_delivery = 0;
             for empty_delivery_node in config.get_first_empty_dropoff()..config.get_first_afs() {
-                let request = config.get_request_at_node(empty_delivery_node);
-                empty_20_delivery -= request.empty_20;
-                empty_40_delivery -= request.empty_40;
+                if !self.get_request_visited(empty_delivery_node) {
+                    let request = config.get_request_at_node(empty_delivery_node);
+                    empty_20_delivery -= request.empty_20;
+                    empty_40_delivery -= request.empty_40;
+                }
             }
             let mut empty_20_pickup = 0;
             let mut empty_40_pickup = 0;
             for empty_pickup_node in (config.get_full_pickup() + 1)..config.get_first_full_dropoff()
             {
-                let request = config.get_request_at_node(empty_pickup_node);
-                empty_20_pickup += request.empty_20;
-                empty_40_pickup += request.empty_40;
+                if !self.get_request_visited(empty_pickup_node) {
+                    let request = config.get_request_at_node(empty_pickup_node);
+                    empty_20_pickup += request.empty_20;
+                    empty_40_pickup += request.empty_40;
+                }
             }
             return EmptyContainersStillNeeded {
                 empty_20_delivery,
