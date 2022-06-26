@@ -1083,16 +1083,16 @@ use solver_data::*;
 use std::rc::Rc;
 use std::time::Instant;
 
-pub fn solve(config: Config, verbose: bool) -> Solution {
+pub fn solve(config: Config, verbose: bool, optimal: bool) -> Solution {
     let start_time = Instant::now();
     let mut all_known_options = AllKnownOptions::new(verbose);
-    let mut options_for_truck = solve_for_truck(&config, 0, verbose);
+    let mut options_for_truck = solve_for_truck(&config, 0, verbose, optimal);
     all_known_options.inital_merge(&options_for_truck);
     for truck_index in 1..config.get_num_trucks() {
         let current_truck = config.get_truck(truck_index);
         //avoid unnecessary recalculation of options_for_truck
         if config.get_truck(truck_index - 1) != current_truck {
-            options_for_truck = solve_for_truck(&config, truck_index, verbose);
+            options_for_truck = solve_for_truck(&config, truck_index, verbose, optimal);
         } else if verbose {
             println!(
                 "\nTruck {} is identical to the one before, no calculation necessary.",
@@ -1105,7 +1105,12 @@ pub fn solve(config: Config, verbose: bool) -> Solution {
 }
 
 ///Calculates all the known options for truck at given index
-fn solve_for_truck(config: &Config, truck_index: usize, verbose: bool) -> KnownRoutesForTruck {
+fn solve_for_truck(
+    config: &Config,
+    truck_index: usize,
+    verbose: bool,
+    optimal: bool,
+) -> KnownRoutesForTruck {
     let truck = config.get_truck(truck_index);
     if verbose {
         println!("\nCalculating options for truck {} ...", truck_index);
@@ -1127,7 +1132,13 @@ fn solve_for_truck(config: &Config, truck_index: usize, verbose: bool) -> KnownR
                     SearchState::start_state(config, truck.get_fuel(), start_20, start_40);
                 //most efficient to call it here
                 known_options.possibly_add(&start_state);
-                solve_for_truck_recursive(config, &truck, &mut known_options, &start_state);
+                solve_for_truck_recursive(
+                    config,
+                    &truck,
+                    &mut known_options,
+                    &start_state,
+                    optimal,
+                );
             }
         }
     }
@@ -1142,6 +1153,7 @@ fn solve_for_truck_recursive(
     truck: &Truck,
     known_options: &mut KnownRoutesForTruck,
     current_state: &Rc<SearchState>,
+    optimal: bool,
 ) {
     //dummy depot is never routed to internally, there is no reason to differentiate between it and the original depot
     assert!(current_state.get_current_node() != config.get_dummy_depot());
@@ -1151,7 +1163,7 @@ fn solve_for_truck_recursive(
         match SearchState::route_to_node(config, truck, &current_state, 0) {
             Option::None => return, //if the depot cannot be reached, the route cannot be ended anyway, so stop here
             Option::Some(depot_state) => {
-                apply_depot_actions(config, truck, known_options, &depot_state);
+                apply_depot_actions(config, truck, known_options, &depot_state, optimal);
             }
         };
     };
@@ -1161,7 +1173,7 @@ fn solve_for_truck_recursive(
             match SearchState::route_to_node(config, truck, &current_state, request_node) {
                 Option::None => (),
                 Option::Some(state) => {
-                    solve_for_truck_recursive(config, truck, known_options, &state);
+                    solve_for_truck_recursive(config, truck, known_options, &state, optimal);
                 }
             };
         };
@@ -1173,18 +1185,27 @@ fn apply_depot_actions(
     truck: &Truck,
     known_options: &mut KnownRoutesForTruck,
     current_state: &Rc<SearchState>,
+    optimal: bool,
 ) {
     assert_eq!(current_state.get_current_node(), 0);
     known_options.possibly_add(&current_state);
-    //loading at the depot is always done in a separate state after navigating to the depot. This prevents repeated identical routing and makes parsing the route easier
-    //calculate only once
-    let containers_needed = current_state.get_containers_still_needed(config);
-    //some combinations are always nonsense, so these are not included in the predefined array
-    for (change_20, change_40) in POSSIBLE_DEPOT_LOADS {
-        if current_state.can_handle_depot_load(truck, &containers_needed, *change_20, *change_40) {
-            //create new state where the loading has been applied. Due to the above condition, no loading will happen immadiately afterwards
-            let loaded_state = SearchState::load_at_depot(&current_state, *change_20, *change_40);
-            solve_for_truck_recursive(config, truck, known_options, &loaded_state);
+    //only on optimal setting: reload at the depot
+    if optimal {
+        //calculate only once
+        let containers_needed = current_state.get_containers_still_needed(config);
+        //some combinations are always nonsense, so these are not included in the predefined array
+        for (change_20, change_40) in POSSIBLE_DEPOT_LOADS {
+            if current_state.can_handle_depot_load(
+                truck,
+                &containers_needed,
+                *change_20,
+                *change_40,
+            ) {
+                //create new state where the loading has been applied. Due to the above condition, no loading will happen immadiately afterwards
+                let loaded_state =
+                    SearchState::load_at_depot(&current_state, *change_20, *change_40);
+                solve_for_truck_recursive(config, truck, known_options, &loaded_state, optimal);
+            }
         }
     }
 }

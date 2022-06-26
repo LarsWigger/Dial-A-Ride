@@ -15,11 +15,18 @@ fn main() {
     let scenario;
     let mut arg_offset = 0;
     let verbose;
+    let optimal;
     if args().nth(1).expect("No arguments found") == String::from("--verbose") {
         arg_offset += 1;
         verbose = true;
     } else {
         verbose = false;
+    }
+    if args().nth(2).expect("No number of full pickups specified") == String::from("--nonoptimal") {
+        arg_offset += 1;
+        optimal = false;
+    } else {
+        optimal = true;
     }
     full_pickup = args()
         .nth(1 + arg_offset)
@@ -62,7 +69,7 @@ fn main() {
         scenario,
         verbose,
     );
-    let solution = solver::solve(config, verbose);
+    let solution = solver::solve(config, verbose, optimal);
     if verbose {
         //separate output from rest
         println!("");
