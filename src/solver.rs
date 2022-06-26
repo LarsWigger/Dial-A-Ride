@@ -380,7 +380,7 @@ mod solver_data {
                     }
                     total_time += config.get_service_time_at_request_node(to);
                 } else if depot_service {
-                    total_time += config.get_depot_service_time();
+                    total_time += config.get_subsequent_depot_service_time();
                 }
             }
             //t_max applies to every type of node, including AFS and the depot
@@ -448,7 +448,7 @@ mod solver_data {
             };
             new_option.refuel(truck);
             if depot_service {
-                new_option.total_time += config.get_depot_service_time();
+                new_option.total_time += config.get_subsequent_depot_service_time();
             }
             return Option::Some(new_option);
         }
@@ -557,21 +557,27 @@ mod solver_data {
 
     impl SearchState {
         ///Creates the initial `SearchState` at the depot with the given `fuel_capacity`, no actions taken so far
-        pub fn start_state(fuel_level: u32) -> Rc<SearchState> {
+        pub fn start_state(
+            config: &Config,
+            fuel_level: u32,
+            start_20: i8,
+            start_40: i8,
+        ) -> Rc<SearchState> {
             let mut path = Vec::with_capacity(1);
             path.push(0);
             let mut path_options = Vec::with_capacity(1);
+            let total_time = (start_20 + start_40) as u32 * config.get_initial_depot_service_time();
             path_options.push(Rc::new(PathOption {
                 fuel_level,
                 total_distance: 0,
-                total_time: 0,
+                total_time,
                 path,
                 previous_index: 0,
             }));
             let search_state = SearchState {
                 current_node: 0,
                 path_options,
-                container_data: ContainerData::new(),
+                container_data: ContainerData::new(start_20, start_40),
                 requests_visisted: 0,
                 previous_state: Option::None,
             };
@@ -1036,12 +1042,12 @@ mod solver_data {
 
     impl ContainerData {
         ///Creates a new `ContainerData` representing nothing currently carried
-        pub fn new() -> ContainerData {
+        pub fn new(start_20: i8, start_40: i8) -> ContainerData {
             return ContainerData {
-                empty_20: 0,
-                empty_40: 0,
-                num_20: 0,
-                num_40: 0,
+                empty_20: start_20,
+                empty_40: start_40,
+                num_20: start_20,
+                num_40: start_40,
                 full_request_1_source: 0,
                 full_request_2_source: 0,
             };
@@ -1110,10 +1116,19 @@ fn solve_for_truck(config: &Config, truck_index: usize, verbose: bool) -> KnownR
             truck.get_fuel() / 100
         );
     }
-
-    let root_state = SearchState::start_state(truck.get_fuel());
     let mut known_options = KnownRoutesForTruck::new();
-    solve_for_truck_recursive(config, &truck, &mut known_options, &root_state);
+    for start_20 in 0..3 {
+        for start_40 in 0..2 {
+            //for every possible initial loading a separate start state
+            if start_20 <= truck.get_num_20_foot_containers()
+                && start_40 <= truck.get_num_40_foot_containers()
+            {
+                let start_state =
+                    SearchState::start_state(config, truck.get_fuel(), start_20, start_40);
+                solve_for_truck_recursive(config, &truck, &mut known_options, &start_state);
+            }
+        }
+    }
     if verbose {
         known_options.summarize_to_terminal();
     }
