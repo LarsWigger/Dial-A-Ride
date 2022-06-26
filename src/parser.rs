@@ -85,7 +85,7 @@ impl DataIdentifier {
     }
 }
 
-const BASE_PATH_STR: &str = "C:\\Users\\larsw\\Documents\\Workspaces\\Dial-A-Ride\\data";
+const BASE_PATH_STR: &str = "C:\\Users\\larsw\\Documents\\Workspaces\\DAR\\Dial-A-Ride\\data";
 
 pub fn parse(
     full_pickup: usize,
