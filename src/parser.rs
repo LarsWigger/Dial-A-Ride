@@ -85,9 +85,8 @@ impl DataIdentifier {
     }
 }
 
-const BASE_PATH_STR: &str = "C:\\Users\\larsw\\Documents\\Workspaces\\DAR\\Dial-A-Ride\\data";
-
 pub fn parse(
+    base_path_str: &str,
     full_pickup: usize,
     empty_pickup: usize,
     empty_delivery: usize,
@@ -113,7 +112,7 @@ pub fn parse(
         num_trucks: 0, //to be overwritten
         t_max: 0,      //to be overwritten
     };
-    let base_path = Path::new(BASE_PATH_STR).join(identifier.get_base_folder());
+    let base_path = Path::new(base_path_str).join(identifier.get_base_folder());
     parse_num_trucks_and_t_max(&mut identifier, &base_path);
     //parse trucks
     let truck_vec = parse_trucks(&identifier, &base_path);
@@ -250,54 +249,4 @@ fn parse_time_constraints(
         earliest_visiting_times,
         latest_visiting_times,
     );
-}
-
-#[cfg(test)]
-mod parser_test {
-    use crate::parser;
-    #[test]
-    fn parse_2_2_2_2_1_2() {
-        let config = parser::parse(2, 2, 2, 2, 1, 2, false);
-        //test distance matrix
-        assert_eq!(config.get_distance_between(0, 0), 0);
-        assert_eq!(config.get_distance_between(3, 2), 199);
-        //test time matrix
-        assert_eq!(config.get_time_between(10, 9), 94);
-        //trucks
-        assert_eq!(config.get_num_trucks(), 6);
-        let truck = config.get_truck(4);
-        assert_eq!(truck.get_num_20_foot_containers(), 2);
-        assert_eq!(truck.get_num_40_foot_containers(), 0);
-        assert_eq!(truck.get_fuel(), 28500);
-        //times
-        assert_eq!(config.get_service_time_at_request_node(1), 10);
-        assert_eq!(config.get_earliest_visiting_time_at_request_node(8), 404);
-        assert_eq!(config.get_latest_visiting_time_at_request_node(7), 802);
-        //base values
-        assert_eq!(config.get_full_pickup(), 2);
-        assert_eq!(config.get_empty_pickup(), 2);
-        assert_eq!(config.get_empty_delivery(), 2);
-        assert_eq!(config.get_afs(), 2);
-        //request
-        let request = config.get_request_at_node(1);
-        assert_eq!(request.full_20, 1);
-        assert_eq!(request.empty_20, 0);
-        assert_eq!(request.full_40, 0);
-        assert_eq!(request.empty_40, 0);
-        let request = config.get_request_at_node(2);
-        assert_eq!(request.full_20, 1);
-        assert_eq!(request.empty_20, 0);
-        assert_eq!(request.full_40, 0);
-        assert_eq!(request.empty_40, 0);
-        let request = config.get_request_at_node(4);
-        assert_eq!(request.full_20, 0);
-        assert_eq!(request.empty_20, 1);
-        assert_eq!(request.full_40, 0);
-        assert_eq!(request.empty_40, 0);
-        let request = config.get_request_at_node(8);
-        assert_eq!(request.full_20, 0);
-        assert_eq!(request.empty_20, -1);
-        assert_eq!(request.full_40, 0);
-        assert_eq!(request.empty_40, 0);
-    }
 }

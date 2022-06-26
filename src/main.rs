@@ -3,6 +3,7 @@ mod parser;
 mod solver;
 
 use std::env::args;
+use std::env::var;
 
 fn main() {
     //parse arguments
@@ -50,7 +51,9 @@ fn main() {
         .expect("No scenario specified")
         .parse()
         .expect("Not a number");
+    let base_path = var("DAR_BASE_PATH").unwrap();
     let config = parser::parse(
+        &base_path,
         full_pickup,
         empty_pickup,
         empty_delivery,
