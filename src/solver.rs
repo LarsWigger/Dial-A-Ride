@@ -955,9 +955,19 @@ mod solver_data {
                 empty_20_delivery -= request.empty_20;
                 empty_40_delivery -= request.empty_40;
             }
+            let mut empty_20_pickup = 0;
+            let mut empty_40_pickup = 0;
+            for empty_pickup_node in (config.get_full_pickup() + 1)..config.get_first_full_dropoff()
+            {
+                let request = config.get_request_at_node(empty_pickup_node);
+                empty_20_pickup += request.empty_20;
+                empty_40_pickup += request.empty_40;
+            }
             return EmptyContainersStillNeeded {
                 empty_20_delivery,
                 empty_40_delivery,
+                empty_20_pickup,
+                empty_40_pickup,
             };
         }
 
@@ -983,12 +993,19 @@ mod solver_data {
             //avoid unecessary branching
             //no reason at all to pickup containers that cannot be delivered anyway
             //this also neatly covers deloading. If it would be better to deload 2 rather than just 1, the option for 1 will be rejected
-            let new_empty_20 = self.container_data.empty_20 + change_20;
-            let new_empty_40 = self.container_data.empty_40 + change_40;
-            if (new_empty_20 > containers_needed.empty_20_delivery)
-                || (new_empty_40 > containers_needed.empty_40_delivery)
-                || (new_empty_20 < 0)
-                || (new_empty_40 < 0)
+            let carried_20 = self.container_data.empty_20 + change_20;
+            let carried_40 = self.container_data.empty_40 + change_40;
+            let remaining_20_capacity = truck.get_num_20_foot_containers() - new_20;
+            let remaining_40_capacity = truck.get_num_40_foot_containers() - new_40;
+            if (carried_20 > containers_needed.empty_20_delivery && change_20 > 0)//load more than reasonable
+                || (carried_40 > containers_needed.empty_40_delivery && change_40 > 0)//load more than reasonable
+                || (carried_20 < 0)//edge case
+                || (carried_40 < 0)
+            //edge case
+            || (remaining_20_capacity > containers_needed.empty_20_pickup && change_20 < 0)
+            //unloaded more than necessary, space made for nothing
+            || (remaining_40_capacity > containers_needed.empty_40_pickup && change_40 < 0)
+            //unloaded more than necessary, space made for nothing
             {
                 return false;
             }
@@ -1059,6 +1076,8 @@ mod solver_data {
         pub empty_20_delivery: i8,
         ///Number of empty 40-foot containers that still need to be delivered
         pub empty_40_delivery: i8,
+        pub empty_20_pickup: i8,
+        pub empty_40_pickup: i8,
     }
 
     ///Represents all the possible loadings done at the depot
