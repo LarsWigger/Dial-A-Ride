@@ -101,6 +101,12 @@ pub fn parse(
             full_pickup, empty_pickup, empty_delivery, afs, sample_number, scenario
         );
     }
+    let mut scenario = scenario;
+    if scenario < 4 {
+        scenario += 3;
+    } else {
+        scenario -= 3;
+    }
     //setup data needed for parsing
     let mut identifier = DataIdentifier {
         full_pickup: full_pickup,

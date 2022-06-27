@@ -1,13 +1,10 @@
 import os
-from posixpath import split
-from tokenize import group
 
 output_path = r"C:\Users\larsw\Documents\Workspaces\DAR\Dial-A-Ride\results\outputs"
 export_path = r"C:\Users\larsw\Documents\Workspaces\DAR\Dial-A-Ride\results\exports"
 
 
 # parse the results
-
 class Result:
     def __init__(self, filename):
         split_file = filename.split("_")
@@ -105,6 +102,36 @@ class Group:
                     return value
         return "NA"
 
+    def get_time_summary_string(self, scenario):
+        base = self.scenarios[scenario - 1]
+        optimal_time = 0
+        for sample in range(1, 6):
+            if sample in base.optimal_time:
+                if base.optimal_time[sample] == -1:
+                    optimal_time = "TO"
+                    break
+                else:
+                    optimal_time += base.optimal_time[sample]
+            else:
+                optimal_time = "NA"
+                break
+        if not isinstance(optimal_time, str):
+            optimal_time //= 5
+        nonoptimal_time = 0
+        for sample in range(1, 6):
+            if sample in base.nonoptimal_time:
+                if base.nonoptimal_time[sample] == -1:
+                    nonoptimal_time = "TO"
+                    break
+                else:
+                    nonoptimal_time += base.nonoptimal_time[sample]
+            else:
+                nonoptimal_time = "NA"
+                break
+        if not isinstance(nonoptimal_time, str):
+            nonoptimal_time //= 5
+        return f" & {optimal_time} & {nonoptimal_time}"
+
 
 current_group = Group(results[0])
 grouped_results = [current_group]
@@ -153,3 +180,26 @@ create_detailed_table(grouped_a_results, True)
 create_detailed_table(grouped_a_results, False)
 create_detailed_table(grouped_b_results, True)
 create_detailed_table(grouped_b_results, False)
+
+
+def create_summary_table(grouped_results):
+    data_type = "a" if grouped_results[0].is_type_a() else "b"
+    table_string = "\\begin{longtable}{|c|c|c|c|c c|c c|c c|c c|c c|c c|}\n" \
+        + "\\caption{Average calculation time of optimal routes for " \
+        + data_type.upper() + "-type data}\n" \
+        + "\\label{tab:avg_time_" + data_type + "} \\\\\n" \
+        + "\\hline\n FP & EP & ED & AFS & $S^o_1$ & $S^n_1$ & $S^o_2$ & $S^n_2$ & $S^o_3$ & $S^n_3$ & $S^o_4$ & $S^n_4$ & $S^o_5$ & $S^n_5$ & $S^o_6$ & $S^n_6$ \\\\" \
+        + "\n\\hline\\hline\n"
+    for group in grouped_results:
+        table_string += f"{group.fp} & {group.ep} & {group.ed} & {group.afs}"
+        for scenario in range(1, 7):
+            table_string += group.get_time_summary_string(scenario)
+        table_string += " \\\\\n\\hline\n"
+    table_string += "\\end{longtable}"
+    filename = f"time_summary_{data_type}.tex"
+    with open(os.path.join(export_path, filename), "w") as f:
+        f.write(table_string)
+
+
+create_summary_table(grouped_a_results)
+create_summary_table(grouped_b_results)
