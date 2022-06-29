@@ -1,0 +1,40 @@
+Parsing configuration: 3 1 1 2 3 1
+
+Calculating options for truck 0 ...
+Truck can load 0 20- and 1 40-foot containers, having a fuel capacity of 285.
+There were 3 valid insertions out of which 2 remain.
+So 1 routes / about 33% were discarded.
+
+Calculating options for truck 1 ...
+Truck can load 1 20- and 0 40-foot containers, having a fuel capacity of 285.
+There were 15 valid insertions out of which 11 remain.
+So 4 routes / about 27% were discarded.
+Performed merge. There were 2 previously known options and 11 for the current truck. Now there are 22 options.
+22 option combinations out of 22 were valid, about 100%.
+Out of these valid options, 0 / 0% were discarded.
+
+Calculating options for truck 2 ...
+Truck can load 1 20- and 1 40-foot containers, having a fuel capacity of 285.
+There were 74 valid insertions out of which 20 remain.
+So 54 routes / about 73% were discarded.
+Performed merge. There were 22 previously known options and 20 for the current truck. Now there are 32 options.
+169 option combinations out of 440 were valid, about 38%.
+Out of these valid options, 137 / 81% were discarded.
+
+Calculating options for truck 3 ...
+Truck can load 2 20- and 0 40-foot containers, having a fuel capacity of 285.
+There were 57 valid insertions out of which 15 remain.
+So 42 routes / about 74% were discarded.
+Performed merge. There were 32 previously known options and 15 for the current truck. Now there are 32 options.
+158 option combinations out of 480 were valid, about 33%.
+Out of these valid options, 126 / 80% were discarded.
+
+Found optimal solution with a total distance of 949 after 0s using the following routes: 
+Truck 0 (0 20- and 1 40-foot containers with fuel capacity 285) with route distance 0:
+0(D)
+Truck 1 (1 20- and 0 40-foot containers with fuel capacity 285) with route distance 0:
+0(D)
+Truck 2 (1 20- and 1 40-foot containers with fuel capacity 285) with route distance 351:
+0(D) => 3(FP,139) => 7(FD,29) => 8(ED,46) => 11(D,137)
+Truck 3 (2 20- and 0 40-foot containers with fuel capacity 285) with route distance 598:
+0(D) => 2(FP,149) => 1(FP,56) => 6(FD,77) => 4(EP,38) => 5(FD,103) => 11(D,175)

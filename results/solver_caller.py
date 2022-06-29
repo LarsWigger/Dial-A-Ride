@@ -19,16 +19,19 @@ class DataGroup:
     def num_nodes(self):
         return 2*self.fp + self.ep+self.ed
 
-    def __lt__(self, other):
-        if self.num_nodes() < other.num_nodes():
-            return True
-        elif other.num_nodes() > self.num_nodes():
-            return False
-        else:
-            return self.afs < other.afs
+
+data_groups = sorted([DataGroup(file) for file in os.listdir(
+    dar_base_path)], key=lambda o: o.num_nodes())
 
 
-data_groups = sorted([DataGroup(file) for file in os.listdir(dar_base_path)])
+def blacklisted(fp, ep, ed, afs, sample, scenario, optimal):
+    if fp >= 4 and ep >= 5 and ed >= 3 and afs >= 2 and scenario in [1, 2, 3] and optimal:
+        return True
+    elif fp >= 5 and ep >= 6 and ed >= 4 and scenario in [1, 2, 3]:
+        return True
+    else:
+        return False
+
 
 for group in data_groups:
     for sample in range(1, 6):
@@ -37,21 +40,25 @@ for group in data_groups:
                 filename = f"{group.fp}_{group.ep}_{group.ed}_{group.afs}_{sample}_{scenario}_{'optimal' if optimal else 'nonoptimal'}.txt"
                 out_path = os.path.join(output_path, filename)
                 if not os.path.exists(out_path):
-                    print(f"Calculating {filename}")
-                    cmd = [binary_path, "--verbose"]
-                    if not optimal:
-                        cmd.append("--nonoptimal")
-                    cmd += [str(group.fp), str(group.ep), str(group.ed), str(group.afs),
-                            str(sample), str(scenario)]
-                    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, env=env)
-                    try:
-                        out = str(p.communicate(timeout=3600)
-                                  [0]).replace("\\n", "\n")[2:-1]
-                        print(f"Completed {filename}")
-                    except subprocess.TimeoutExpired:
-                        out = "TIMEOUT"
-                        print(f"Timeout for {filename}")
-                    with open(out_path, "w") as f:
-                        f.write(out)
+                    if not blacklisted(group.fp, group.ep, group.ed, group.afs, sample, scenario, optimal):
+                        print(f"Calculating {filename}")
+                        cmd = [binary_path, "--verbose"]
+                        if not optimal:
+                            cmd.append("--nonoptimal")
+                        cmd += [str(group.fp), str(group.ep), str(group.ed), str(group.afs),
+                                str(sample), str(scenario)]
+                        p = subprocess.Popen(
+                            cmd, stdout=subprocess.PIPE, env=env)
+                        try:
+                            out = str(p.communicate(timeout=3600)
+                                      [0]).replace("\\n", "\n")[2:-1]
+                            print(f"Completed {filename}")
+                        except subprocess.TimeoutExpired:
+                            out = "TIMEOUT"
+                            print(f"Timeout for {filename}")
+                        with open(out_path, "w") as f:
+                            f.write(out)
+                    else:
+                        print(f"{filename} was blacklisted")
                 else:
                     print(f"{filename} already exists")

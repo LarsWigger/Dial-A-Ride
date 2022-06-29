@@ -1,0 +1,40 @@
+Parsing configuration: 2 2 2 4 2 1
+
+Calculating options for truck 0 ...
+Truck can load 0 20- and 1 40-foot containers, having a fuel capacity of 285.
+There were 2 valid insertions out of which 1 remain.
+So 1 routes / about 50% were discarded.
+
+Calculating options for truck 1 ...
+Truck can load 1 20- and 0 40-foot containers, having a fuel capacity of 285.
+There were 258 valid insertions out of which 57 remain.
+So 201 routes / about 78% were discarded.
+Performed merge. There were 1 previously known options and 57 for the current truck. Now there are 57 options.
+57 option combinations out of 57 were valid, about 100%.
+Out of these valid options, 0 / 0% were discarded.
+
+Calculating options for truck 2 ...
+Truck can load 1 20- and 1 40-foot containers, having a fuel capacity of 285.
+There were 516 valid insertions out of which 57 remain.
+So 459 routes / about 89% were discarded.
+Performed merge. There were 57 previously known options and 57 for the current truck. Now there are 64 options.
+679 option combinations out of 3249 were valid, about 21%.
+Out of these valid options, 615 / 91% were discarded.
+
+Calculating options for truck 3 ...
+Truck can load 2 20- and 0 40-foot containers, having a fuel capacity of 285.
+There were 2801 valid insertions out of which 64 remain.
+So 2737 routes / about 98% were discarded.
+Performed merge. There were 64 previously known options and 64 for the current truck. Now there are 64 options.
+729 option combinations out of 4096 were valid, about 18%.
+Out of these valid options, 665 / 91% were discarded.
+
+Found optimal solution with a total distance of 639 after 0s using the following routes: 
+Truck 0 (0 20- and 1 40-foot containers with fuel capacity 285) with route distance 0:
+0(D)
+Truck 1 (1 20- and 0 40-foot containers with fuel capacity 285) with route distance 0:
+0(D)
+Truck 2 (1 20- and 1 40-foot containers with fuel capacity 285) with route distance 0:
+0(D)
+Truck 3 (2 20- and 0 40-foot containers with fuel capacity 285) with route distance 639:
+0(D) => 9(AFS,86) => 1(FP,9) => 5(FD,18) => 2(FP,138) => 3(EP,199) => 8(ED,15) => 4(EP,15) => 7(ED,86) => 6(FD,25) => 13(D,48)

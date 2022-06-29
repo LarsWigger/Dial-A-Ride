@@ -1,0 +1,40 @@
+Parsing configuration: 2 2 2 4 3 1
+
+Calculating options for truck 0 ...
+Truck can load 0 20- and 1 40-foot containers, having a fuel capacity of 285.
+There were 2 valid insertions out of which 1 remain.
+So 1 routes / about 50% were discarded.
+
+Calculating options for truck 1 ...
+Truck can load 1 20- and 0 40-foot containers, having a fuel capacity of 285.
+There were 55 valid insertions out of which 34 remain.
+So 21 routes / about 38% were discarded.
+Performed merge. There were 1 previously known options and 34 for the current truck. Now there are 34 options.
+34 option combinations out of 34 were valid, about 100%.
+Out of these valid options, 0 / 0% were discarded.
+
+Calculating options for truck 2 ...
+Truck can load 1 20- and 1 40-foot containers, having a fuel capacity of 285.
+There were 110 valid insertions out of which 34 remain.
+So 76 routes / about 69% were discarded.
+Performed merge. There were 34 previously known options and 34 for the current truck. Now there are 64 options.
+433 option combinations out of 1156 were valid, about 37%.
+Out of these valid options, 369 / 85% were discarded.
+
+Calculating options for truck 3 ...
+Truck can load 2 20- and 0 40-foot containers, having a fuel capacity of 285.
+There were 361 valid insertions out of which 56 remain.
+So 305 routes / about 84% were discarded.
+Performed merge. There were 64 previously known options and 56 for the current truck. Now there are 64 options.
+706 option combinations out of 3584 were valid, about 20%.
+Out of these valid options, 642 / 91% were discarded.
+
+Found optimal solution with a total distance of 1081 after 0s using the following routes: 
+Truck 0 (0 20- and 1 40-foot containers with fuel capacity 285) with route distance 0:
+0(D)
+Truck 1 (1 20- and 0 40-foot containers with fuel capacity 285) with route distance 0:
+0(D)
+Truck 2 (1 20- and 1 40-foot containers with fuel capacity 285) with route distance 464:
+0(D) => 4(EP,157) => 8(ED,170) => 13(D,137)
+Truck 3 (2 20- and 0 40-foot containers with fuel capacity 285) with route distance 617:
+0(D) => 2(FP,149) => 1(FP,56) => 6(FD,77) => 3(EP,38) => 5(FD,103) => 7(ED,56) => 13(D,138)
