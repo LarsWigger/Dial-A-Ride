@@ -1,0 +1,68 @@
+Parsing configuration: 5 6 4 6 4 6
+
+Calculating options for truck 0 ...
+Truck can load 0 20- and 1 40-foot containers, having a fuel capacity of 285.
+There were 36 valid insertions out of which 34 remain.
+So 2 routes / about 6% were discarded.
+
+Truck 1 is identical to the one before, no calculation necessary.
+Performed merge. There were 34 previously known options and 34 for the current truck. Now there are 64 options.
+333 option combinations out of 1156 were valid, about 29%.
+Out of these valid options, 269 / 81% were discarded.
+
+Calculating options for truck 2 ...
+Truck can load 1 20- and 0 40-foot containers, having a fuel capacity of 285.
+There were 79 valid insertions out of which 75 remain.
+So 4 routes / about 5% were discarded.
+Performed merge. There were 64 previously known options and 75 for the current truck. Now there are 4800 options.
+4800 option combinations out of 4800 were valid, about 100%.
+Out of these valid options, 0 / 0% were discarded.
+
+Truck 3 is identical to the one before, no calculation necessary.
+Performed merge. There were 4800 previously known options and 75 for the current truck. Now there are 20992 options.
+120384 option combinations out of 360000 were valid, about 33%.
+Out of these valid options, 99392 / 83% were discarded.
+
+Calculating options for truck 4 ...
+Truck can load 1 20- and 1 40-foot containers, having a fuel capacity of 285.
+There were 4012 valid insertions out of which 1572 remain.
+So 2440 routes / about 61% were discarded.
+Performed merge. There were 20992 previously known options and 1572 for the current truck. Now there are 29952 options.
+2316206 option combinations out of 32999424 were valid, about 7%.
+Out of these valid options, 2286254 / 99% were discarded.
+
+Truck 5 is identical to the one before, no calculation necessary.
+Performed merge. There were 29952 previously known options and 1572 for the current truck. Now there are 32512 options.
+2971796 option combinations out of 47084544 were valid, about 6%.
+Out of these valid options, 2939284 / 99% were discarded.
+
+Calculating options for truck 6 ...
+Truck can load 2 20- and 0 40-foot containers, having a fuel capacity of 285.
+There were 721 valid insertions out of which 270 remain.
+So 451 routes / about 63% were discarded.
+Performed merge. There were 32512 previously known options and 270 for the current truck. Now there are 32768 options.
+956352 option combinations out of 8778240 were valid, about 11%.
+Out of these valid options, 923584 / 97% were discarded.
+
+Truck 7 is identical to the one before, no calculation necessary.
+Performed merge. There were 32768 previously known options and 270 for the current truck. Now there are 32768 options.
+958464 option combinations out of 8847360 were valid, about 11%.
+Out of these valid options, 925696 / 97% were discarded.
+
+Found optimal solution with a total distance of 2065 after 2s using the following routes: 
+Truck 0 (0 20- and 1 40-foot containers with fuel capacity 285) with route distance 0:
+0(D)
+Truck 1 (0 20- and 1 40-foot containers with fuel capacity 285) with route distance 0:
+0(D)
+Truck 2 (1 20- and 0 40-foot containers with fuel capacity 285) with route distance 0:
+0(D)
+Truck 3 (1 20- and 0 40-foot containers with fuel capacity 285) with route distance 0:
+0(D)
+Truck 4 (1 20- and 1 40-foot containers with fuel capacity 285) with route distance 677:
+0(D) => 7(EP,106) => 26(AFS,81) => 20(ED,89) => 8(EP,62) => 19(ED,49) => 5(FP,49) => 16(FD,176) => 27(D,65)
+Truck 5 (1 20- and 1 40-foot containers with fuel capacity 285) with route distance 786:
+0(D) => 3(FP,154) => 1(FP,82) => 22(AFS,135) => 14(FD,29) => 12(FD,18) => 4(FP,63) => 15(FD,50) => 9(EP,27) => 18(ED,85) => 27(D,143)
+Truck 6 (2 20- and 0 40-foot containers with fuel capacity 285) with route distance 0:
+0(D)
+Truck 7 (2 20- and 0 40-foot containers with fuel capacity 285) with route distance 602:
+0(D) => 2(FP,40) => 6(EP,182) => 17(ED,45) => 13(FD,144) => 10(EP,49) => 11(EP,0) => 27(D,142)

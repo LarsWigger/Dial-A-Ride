@@ -1,0 +1,68 @@
+Parsing configuration: 6 7 5 6 5 6
+
+Calculating options for truck 0 ...
+Truck can load 0 20- and 1 40-foot containers, having a fuel capacity of 285.
+There were 93 valid insertions out of which 64 remain.
+So 29 routes / about 31% were discarded.
+
+Truck 1 is identical to the one before, no calculation necessary.
+Performed merge. There were 64 previously known options and 64 for the current truck. Now there are 64 options.
+729 option combinations out of 4096 were valid, about 18%.
+Out of these valid options, 665 / 91% were discarded.
+
+Calculating options for truck 2 ...
+Truck can load 1 20- and 0 40-foot containers, having a fuel capacity of 285.
+There were 2491 valid insertions out of which 1194 remain.
+So 1297 routes / about 52% were discarded.
+Performed merge. There were 64 previously known options and 1194 for the current truck. Now there are 38912 options.
+57664 option combinations out of 76416 were valid, about 75%.
+Out of these valid options, 18752 / 33% were discarded.
+
+Truck 3 is identical to the one before, no calculation necessary.
+Performed merge. There were 38912 previously known options and 1194 for the current truck. Now there are 197632 options.
+6594624 option combinations out of 46460928 were valid, about 14%.
+Out of these valid options, 6396992 / 97% were discarded.
+
+Calculating options for truck 4 ...
+Truck can load 1 20- and 1 40-foot containers, having a fuel capacity of 285.
+There were 632132 valid insertions out of which 25482 remain.
+So 606650 routes / about 96% were discarded.
+Performed merge. There were 197632 previously known options and 25482 for the current truck. Now there are 262144 options.
+126626908 option combinations out of 5036058624 were valid, about 3%.
+Out of these valid options, 126364764 / 100% were discarded.
+
+Truck 5 is identical to the one before, no calculation necessary.
+Performed merge. There were 262144 previously known options and 25482 for the current truck. Now there are 262144 options.
+146244608 option combinations out of 6679953408 were valid, about 2%.
+Out of these valid options, 145982464 / 100% were discarded.
+
+Calculating options for truck 6 ...
+Truck can load 2 20- and 0 40-foot containers, having a fuel capacity of 285.
+There were 251177 valid insertions out of which 5176 remain.
+So 246001 routes / about 98% were discarded.
+Performed merge. There were 262144 previously known options and 5176 for the current truck. Now there are 262144 options.
+44855808 option combinations out of 1356857344 were valid, about 3%.
+Out of these valid options, 44593664 / 99% were discarded.
+
+Truck 7 is identical to the one before, no calculation necessary.
+Performed merge. There were 262144 previously known options and 5176 for the current truck. Now there are 262144 options.
+44855808 option combinations out of 1356857344 were valid, about 3%.
+Out of these valid options, 44593664 / 99% were discarded.
+
+Found optimal solution with a total distance of 2671 after 435s using the following routes: 
+Truck 0 (0 20- and 1 40-foot containers with fuel capacity 285) with route distance 0:
+0(D)
+Truck 1 (0 20- and 1 40-foot containers with fuel capacity 285) with route distance 0:
+0(D)
+Truck 2 (1 20- and 0 40-foot containers with fuel capacity 285) with route distance 0:
+0(D)
+Truck 3 (1 20- and 0 40-foot containers with fuel capacity 285) with route distance 0:
+0(D)
+Truck 4 (1 20- and 1 40-foot containers with fuel capacity 285) with route distance 827:
+0(D) => 3(FP,104) => 23(ED,12) => 26(AFS,51) => 16(FD,23) => 2(FP,72) => 4(FP,73) => 15(FD,120) => 10(EP,16) => 17(FD,79) => 25(AFS,52) => 8(EP,89) => 31(D,136)
+Truck 5 (1 20- and 1 40-foot containers with fuel capacity 285) with route distance 752:
+0(D) => 1(FP,148) => 30(AFS,80) => 7(EP,49) => 14(FD,212) => 11(EP,67) => 22(ED,17) => 21(ED,84) => 20(ED,31) => 31(D,64)
+Truck 6 (2 20- and 0 40-foot containers with fuel capacity 285) with route distance 1092:
+0(D) => 5(FP,229) => 25(AFS,5) => 18(FD,167) => 30(AFS,76) => 6(FP,18) => 9(EP,32) => 19(FD,201) => 24(ED,17) => 12(EP,173) => 13(EP,0) => 31(D,174)
+Truck 7 (2 20- and 0 40-foot containers with fuel capacity 285) with route distance 0:
+0(D)

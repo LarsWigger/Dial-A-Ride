@@ -1,0 +1,68 @@
+Parsing configuration: 6 7 5 2 1 6
+
+Calculating options for truck 0 ...
+Truck can load 0 20- and 1 40-foot containers, having a fuel capacity of 285.
+There were 40 valid insertions out of which 34 remain.
+So 6 routes / about 15% were discarded.
+
+Truck 1 is identical to the one before, no calculation necessary.
+Performed merge. There were 34 previously known options and 34 for the current truck. Now there are 64 options.
+359 option combinations out of 1156 were valid, about 31%.
+Out of these valid options, 295 / 82% were discarded.
+
+Calculating options for truck 2 ...
+Truck can load 1 20- and 0 40-foot containers, having a fuel capacity of 285.
+There were 455 valid insertions out of which 449 remain.
+So 6 routes / about 1% were discarded.
+Performed merge. There were 64 previously known options and 449 for the current truck. Now there are 28736 options.
+28736 option combinations out of 28736 were valid, about 100%.
+Out of these valid options, 0 / 0% were discarded.
+
+Truck 3 is identical to the one before, no calculation necessary.
+Performed merge. There were 28736 previously known options and 449 for the current truck. Now there are 168896 options.
+2320064 option combinations out of 12902464 were valid, about 18%.
+Out of these valid options, 2151168 / 93% were discarded.
+
+Calculating options for truck 4 ...
+Truck can load 1 20- and 1 40-foot containers, having a fuel capacity of 285.
+There were 47123 valid insertions out of which 10668 remain.
+So 36455 routes / about 77% were discarded.
+Performed merge. There were 168896 previously known options and 10668 for the current truck. Now there are 242944 options.
+56200080 option combinations out of 1801782528 were valid, about 3%.
+Out of these valid options, 55957136 / 100% were discarded.
+
+Truck 5 is identical to the one before, no calculation necessary.
+Performed merge. There were 242944 previously known options and 10668 for the current truck. Now there are 260480 options.
+73351426 option combinations out of 2591726592 were valid, about 3%.
+Out of these valid options, 73090946 / 100% were discarded.
+
+Calculating options for truck 6 ...
+Truck can load 2 20- and 0 40-foot containers, having a fuel capacity of 285.
+There were 4445 valid insertions out of which 1598 remain.
+So 2847 routes / about 64% were discarded.
+Performed merge. There were 260480 previously known options and 1598 for the current truck. Now there are 262144 options.
+23368960 option combinations out of 416247040 were valid, about 6%.
+Out of these valid options, 23106816 / 99% were discarded.
+
+Truck 7 is identical to the one before, no calculation necessary.
+Performed merge. There were 262144 previously known options and 1598 for the current truck. Now there are 262144 options.
+23408640 option combinations out of 418906112 were valid, about 6%.
+Out of these valid options, 23146496 / 99% were discarded.
+
+Found optimal solution with a total distance of 2265 after 34s using the following routes: 
+Truck 0 (0 20- and 1 40-foot containers with fuel capacity 285) with route distance 0:
+0(D)
+Truck 1 (0 20- and 1 40-foot containers with fuel capacity 285) with route distance 0:
+0(D)
+Truck 2 (1 20- and 0 40-foot containers with fuel capacity 285) with route distance 0:
+0(D)
+Truck 3 (1 20- and 0 40-foot containers with fuel capacity 285) with route distance 0:
+0(D)
+Truck 4 (1 20- and 1 40-foot containers with fuel capacity 285) with route distance 755:
+0(D) => 4(FP,87) => 17(FD,56) => 25(AFS,21) => 8(EP,56) => 22(ED,50) => 11(EP,161) => 3(FP,11) => 21(ED,52) => 12(EP,102) => 16(FD,111) => 27(D,48)
+Truck 5 (1 20- and 1 40-foot containers with fuel capacity 285) with route distance 439:
+0(D) => 24(ED,149) => 13(EP,15) => 20(ED,69) => 9(EP,26) => 7(EP,24) => 27(D,156)
+Truck 6 (2 20- and 0 40-foot containers with fuel capacity 285) with route distance 523:
+0(D) => 23(ED,76) => 10(EP,117) => 5(FP,85) => 25(AFS,143) => 18(FD,62) => 27(D,40)
+Truck 7 (2 20- and 0 40-foot containers with fuel capacity 285) with route distance 548:
+0(D) => 25(AFS,86) => 1(FP,9) => 14(FD,18) => 2(FP,138) => 6(FP,19) => 15(FD,184) => 19(FD,36) => 27(D,58)

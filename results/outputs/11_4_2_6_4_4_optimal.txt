@@ -1,0 +1,40 @@
+Parsing configuration: 11 4 2 6 4 4
+
+Calculating options for truck 0 ...
+Truck can load 0 20- and 1 40-foot containers, having a fuel capacity of 285.
+There were 57 valid insertions out of which 56 remain.
+So 1 routes / about 2% were discarded.
+
+Calculating options for truck 1 ...
+Truck can load 1 20- and 0 40-foot containers, having a fuel capacity of 285.
+There were 337 valid insertions out of which 336 remain.
+So 1 routes / about 0% were discarded.
+Performed merge. There were 56 previously known options and 336 for the current truck. Now there are 18816 options.
+18816 option combinations out of 18816 were valid, about 100%.
+Out of these valid options, 0 / 0% were discarded.
+
+Calculating options for truck 2 ...
+Truck can load 1 20- and 1 40-foot containers, having a fuel capacity of 285.
+There were 463216 valid insertions out of which 14028 remain.
+So 449188 routes / about 97% were discarded.
+Performed merge. There were 18816 previously known options and 14028 for the current truck. Now there are 108544 options.
+14569695 option combinations out of 263950848 were valid, about 6%.
+Out of these valid options, 14461151 / 99% were discarded.
+
+Calculating options for truck 3 ...
+Truck can load 2 20- and 0 40-foot containers, having a fuel capacity of 285.
+There were 33221 valid insertions out of which 1268 remain.
+So 31953 routes / about 96% were discarded.
+Performed merge. There were 108544 previously known options and 1268 for the current truck. Now there are 131072 options.
+9028224 option combinations out of 137633792 were valid, about 7%.
+Out of these valid options, 8897152 / 99% were discarded.
+
+Found optimal solution with a total distance of 2758 after 410s using the following routes: 
+Truck 0 (0 20- and 1 40-foot containers with fuel capacity 285) with route distance 0:
+0(D)
+Truck 1 (1 20- and 0 40-foot containers with fuel capacity 285) with route distance 0:
+0(D)
+Truck 2 (1 20- and 1 40-foot containers with fuel capacity 285) with route distance 1297:
+0(D) => 2(FP,40) => 4(FP,74) => 19(FD,50) => 7(FP,73) => 22(FD,45) => 17(FD,102) => 3(FP,86) => 9(FP,10) => 34(AFS,43) => 18(FD,33) => 12(EP,105) => 24(FD,77) => 28(ED,56) => 10(FP,65) => 34(AFS,46) => 25(FD,37) => 8(FP,64) => 13(EP,59) => 23(FD,89) => 35(D,143)
+Truck 3 (2 20- and 0 40-foot containers with fuel capacity 285) with route distance 1461:
+0(D) => 34(AFS,172) => 1(FP,42) => 6(FP,163) => 16(FD,148) => 0(D,104) => REFUEL => LOAD 20 => 21(FD,155) => 11(FP,98) => 27(ED,44) => 5(FP,49) => 30(AFS,99) => 20(FD,89) => 26(FD,109) => 15(EP,47) => 14(EP,0) => 35(D,142)

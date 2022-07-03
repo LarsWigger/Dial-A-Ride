@@ -1,0 +1,68 @@
+Parsing configuration: 10 2 2 4 5 6
+
+Calculating options for truck 0 ...
+Truck can load 0 20- and 1 40-foot containers, having a fuel capacity of 285.
+There were 29 valid insertions out of which 28 remain.
+So 1 routes / about 3% were discarded.
+
+Truck 1 is identical to the one before, no calculation necessary.
+Performed merge. There were 28 previously known options and 28 for the current truck. Now there are 32 options.
+225 option combinations out of 784 were valid, about 29%.
+Out of these valid options, 193 / 86% were discarded.
+
+Calculating options for truck 2 ...
+Truck can load 1 20- and 0 40-foot containers, having a fuel capacity of 285.
+There were 121 valid insertions out of which 120 remain.
+So 1 routes / about 1% were discarded.
+Performed merge. There were 32 previously known options and 120 for the current truck. Now there are 3840 options.
+3840 option combinations out of 3840 were valid, about 100%.
+Out of these valid options, 0 / 0% were discarded.
+
+Truck 3 is identical to the one before, no calculation necessary.
+Performed merge. There were 3840 previously known options and 120 for the current truck. Now there are 14336 options.
+148512 option combinations out of 460800 were valid, about 32%.
+Out of these valid options, 134176 / 90% were discarded.
+
+Calculating options for truck 4 ...
+Truck can load 1 20- and 1 40-foot containers, having a fuel capacity of 285.
+There were 16260 valid insertions out of which 1846 remain.
+So 14414 routes / about 89% were discarded.
+Performed merge. There were 14336 previously known options and 1846 for the current truck. Now there are 16384 options.
+1867920 option combinations out of 26464256 were valid, about 7%.
+Out of these valid options, 1851536 / 99% were discarded.
+
+Truck 5 is identical to the one before, no calculation necessary.
+Performed merge. There were 16384 previously known options and 1846 for the current truck. Now there are 16384 options.
+1972032 option combinations out of 30244864 were valid, about 7%.
+Out of these valid options, 1955648 / 99% were discarded.
+
+Calculating options for truck 6 ...
+Truck can load 2 20- and 0 40-foot containers, having a fuel capacity of 285.
+There were 4959 valid insertions out of which 440 remain.
+So 4519 routes / about 91% were discarded.
+Performed merge. There were 16384 previously known options and 440 for the current truck. Now there are 16384 options.
+604800 option combinations out of 7208960 were valid, about 8%.
+Out of these valid options, 588416 / 97% were discarded.
+
+Truck 7 is identical to the one before, no calculation necessary.
+Performed merge. There were 16384 previously known options and 440 for the current truck. Now there are 16384 options.
+604800 option combinations out of 7208960 were valid, about 8%.
+Out of these valid options, 588416 / 97% were discarded.
+
+Found optimal solution with a total distance of 2837 after 4s using the following routes: 
+Truck 0 (0 20- and 1 40-foot containers with fuel capacity 285) with route distance 0:
+0(D)
+Truck 1 (0 20- and 1 40-foot containers with fuel capacity 285) with route distance 0:
+0(D)
+Truck 2 (1 20- and 0 40-foot containers with fuel capacity 285) with route distance 0:
+0(D)
+Truck 3 (1 20- and 0 40-foot containers with fuel capacity 285) with route distance 0:
+0(D)
+Truck 4 (1 20- and 1 40-foot containers with fuel capacity 285) with route distance 574:
+0(D) => 6(FP,206) => 18(FD,233) => 24(ED,17) => 29(D,118)
+Truck 5 (1 20- and 1 40-foot containers with fuel capacity 285) with route distance 1107:
+0(D) => 4(FP,109) => 16(FD,160) => 7(FP,168) => 28(AFS,129) => 19(FD,112) => 23(ED,29) => 3(FP,12) => 26(AFS,63) => 15(FD,23) => 8(FP,143) => 20(FD,95) => 29(D,64)
+Truck 6 (2 20- and 0 40-foot containers with fuel capacity 285) with route distance 1156:
+0(D) => 2(FP,81) => 14(FD,154) => 10(FP,16) => 5(FP,38) => 22(FD,82) => 9(FP,103) => 17(FD,61) => 1(FP,15) => 28(AFS,19) => 21(FD,114) => 13(FD,143) => 11(EP,156) => 12(EP,0) => 29(D,174)
+Truck 7 (2 20- and 0 40-foot containers with fuel capacity 285) with route distance 0:
+0(D)

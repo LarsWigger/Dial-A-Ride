@@ -29,6 +29,10 @@ def blacklisted(fp, ep, ed, afs, sample, scenario, optimal):
         return True
     elif fp >= 5 and ep >= 6 and ed >= 4 and scenario in [1, 2, 3]:
         return True
+    elif fp >= 6 and ep >= 2 and ed >= 2 and afs >= 2 and scenario in [1, 2, 3] and optimal:
+        return True
+    elif fp >= 8 and ep >= 2 and ed >= 2 and scenario in [1,2,3]:
+        return True
     else:
         return False
 
@@ -58,6 +62,7 @@ for group in data_groups:
                             print(f"Timeout for {filename}")
                         with open(out_path, "w") as f:
                             f.write(out)
+                        p.terminate()
                     else:
                         print(f"{filename} was blacklisted")
                 else:
