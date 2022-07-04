@@ -31,7 +31,13 @@ def blacklisted(fp, ep, ed, afs, sample, scenario, optimal):
         return True
     elif fp >= 6 and ep >= 2 and ed >= 2 and afs >= 2 and scenario in [1, 2, 3] and optimal:
         return True
-    elif fp >= 8 and ep >= 2 and ed >= 2 and scenario in [1,2,3]:
+    elif fp >= 8 and ep >= 2 and ed >= 2 and scenario in [1, 2, 3]:
+        return True
+    elif fp == 13 and ep == 4 and ed == 2:
+        return True
+    elif fp == 8 and ep == 10 and ed == 6:
+        return True
+    elif fp >= 7 and ep >= 8 and ed >= 6 and scenario in [4, 5, 6] and optimal:
         return True
     else:
         return False
