@@ -147,6 +147,8 @@ grouped_b_results = [
 
 
 def create_detailed_table(grouped_results, distance):
+    grouped_results = sorted(
+        grouped_results, key=lambda g: 10*(2 * g.fp + g.ep + g.ed) + g.afs)
     data_type = "a" if grouped_results[0].is_type_a() else "b"
     short_value = "distance" if distance else "time"
     table_string = "\\begin{longtable}{|c|c|c|c|c|c c|c c|c c|c c|c c|}\n\\caption{" + \
@@ -183,6 +185,8 @@ create_detailed_table(grouped_b_results, False)
 
 
 def create_summary_table(grouped_results):
+    grouped_results = sorted(
+        grouped_results, key=lambda g: 10*(2 * g.fp + g.ep + g.ed) + g.afs)
     data_type = "a" if grouped_results[0].is_type_a() else "b"
     table_string = "\\begin{longtable}{|c|c|c|c|c c|c c|c c|c c|c c|c c|}\n" \
         + "\\caption{Average calculation time of optimal routes for " \
