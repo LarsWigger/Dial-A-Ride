@@ -10,7 +10,7 @@ mod solver_data {
 
     ///Represents the route a single truck could take.
     pub struct Route {
-        ///the nodes taken by the route, saved as u8 to save memory, special nodes specified above for (de-)loading at depot,
+        ///the nodes taken by the route, saved as u8 to save memory, special nodes specified in the data-module for (de-)loading at depot,
         /// fueling at depot is indicated by ROUTE_DEPOT_REFUEL in succession which is already indicated that way in the actual `PathOption`s
         path: Vec<u8>,
         ///summary metric for comparing different routes
@@ -31,7 +31,7 @@ mod solver_data {
             };
         }
 
-        ///Recursive helper function that tracks back to the root state. On the way to the root state, it calculates the numer of elements needed in the final
+        ///Recursive helper function that tracks back to the root state. On the way to the root state, it calculates the number of elements needed in the final
         /// vector. The count from previous (upper) calls is passed as `current_size`.
         fn new_path_recursive(
             current_state: &Rc<SearchState>,
@@ -110,7 +110,7 @@ mod solver_data {
     impl KnownRoutesForTruck {
         ///Creates a new `KnownRoutesForTruck`
         pub fn new() -> KnownRoutesForTruck {
-            //TODO: use faster hasher
+            //using a faster hasher may speed things up, but this is not done here
             let map = HashMap::new();
             return KnownRoutesForTruck {
                 map,
@@ -119,9 +119,9 @@ mod solver_data {
         }
 
         ///Adds the best route from the given `search_state` if:
-        /// - there are no full containers currently loaded in `SearchState`
+        /// - there are no full containers currently loaded in `SearchState` (because such a route cannot yield a complete coverage with compatible others)
         /// - there is no other known route for `search_state.requests_visited` yet
-        /// - the route in `search_state` for its `requests_visited` is better than the one already known
+        /// - OR the route in `search_state` for its `requests_visited` is better than the one already known
         pub fn possibly_add(&mut self, search_state: &Rc<SearchState>) {
             //check whether any full containers have been picked up but not delivered
             //this could not result in any proper result anyway, so we may as well prevent it here
@@ -162,7 +162,7 @@ mod solver_data {
         }
     }
 
-    ///Combines up to `config.num_trucks` routes, each corresponding to the truck at the respective index,
+    ///Combines routes for different trucks, each corresponding to the truck at the respective index,
     /// while also saving the summary metric of the `total_distance` of these routes
     struct CombinationOption {
         ///summary metric, sum of the distance of the individual routes
@@ -197,7 +197,6 @@ mod solver_data {
         ///Just copy references to all the routes into `option_map` while adjusting/initializing the slightly different format
         pub fn inital_merge(&mut self, truck_options: &KnownRoutesForTruck) {
             for (key, value) in &truck_options.map {
-                //gets thrown away anyway
                 let mut routes = Vec::with_capacity(1);
                 routes.push(Rc::clone(value));
                 let option = CombinationOption {
@@ -212,7 +211,6 @@ mod solver_data {
         ///Merge the new `truck_options` with the previously known options.
         /// If two options are compatible (no request visited by both), they can be combined.
         /// This combination is inserted if there is either no previous one or if it has a lower `total_distance`.
-        /// In order to avoid conflicts, the original map is replaced with a new one without being changed itself
         pub fn subsequent_merge(&mut self, truck_options: &KnownRoutesForTruck) {
             self.num_compatible_combinations = 0;
             //performing this operation in place could lead to problems
@@ -313,9 +311,6 @@ mod solver_data {
     ///
     /// Comparisons between paths ending at different nodes are obviously pointless.
     /// The concrete path is not relevant for the comparison of different paths, these three summary values describe it completely.
-    /// There can be at most 9 different `PathOption`s connecting two nodes.
-    /// If there were one more, one of the 10 options would be completely inferior to another, reducing the number back to 9 (mathematical proof not shown here).
-    /// There can be less than 9 `PathOption`s, though.
     struct PathOption {
         ///the fuel level of the vehicle at the last node, in 0.01l to avoid floating point operations
         fuel_level: u32,
@@ -336,8 +331,8 @@ mod solver_data {
         /// Returns `None` if there is no possible path, which may be if:
         /// - fuel is insufficient
         /// - arrival time is too late
-        /// If `new_path == true`, the depot service time is added to the total time.
-        /// If `new_path == true`, `self.path_options` is not copied over. This is needed when `self` is from the previous state.
+        /// If `depot_service == true`, the depot service time is added to the total time first.
+        /// If `new_path == true`, `self.path_options` is not copied over. This is needed when `self` is from the previous `SearchState`.
         pub fn next_path_option(
             &self,
             config: &Config,
@@ -446,7 +441,7 @@ mod solver_data {
         }
 
         ///Returns `true` if `self` would be preferred over `other` in every scenario.
-        /// Also checks whether the two paths are comparable in the first place.
+        /// Also checks whether the two are comparable in the first place.
         /// This criterium includes `partly_superior_to`, so equivalence does not count as complete superiority.
         pub fn completely_superior_to(&self, other: &PathOption) -> bool {
             return self.comparable_to(other)
@@ -541,7 +536,7 @@ mod solver_data {
         path_options: Vec<Rc<PathOption>>,
         ///represents the containers the truck is carrying in this state
         container_data: ContainerData,
-        ///the requests that have been visited so far, binary encoding for efficiency
+        ///the requests that have been visited so far, binary encoding for efficiency (nth bit from the right true if request n was visited)
         requests_visisted: u64,
         ///the next state after this one, may or may not exist and may be overwritten later
         previous_state: Option<Rc<SearchState>>,
@@ -827,7 +822,7 @@ mod solver_data {
         }
 
         ///Removes the elements of `path_options` that are completely inferior to `new_option`
-        /// and adds `new_option` if it was partially superior to at least one of the previous elements.
+        /// and adds `new_option` if none of the previous elements is at least as good as the new one.
         /// Returns `true` if a change was made, `false` otherwise
         fn possibly_add_to_path_options(
             path_options: &mut Vec<Rc<PathOption>>,
@@ -1072,7 +1067,9 @@ mod solver_data {
         pub empty_20_delivery: i8,
         ///Number of empty 40-foot containers that still need to be delivered
         pub empty_40_delivery: i8,
+        ///Number of empty 20-foot containers that still need to be picked up
         pub empty_20_pickup: i8,
+        ///Number of empty 40-foot containers that still need to be picked up
         pub empty_40_pickup: i8,
     }
 
@@ -1098,6 +1095,7 @@ use solver_data::*;
 use std::rc::Rc;
 use std::time::Instant;
 
+///Takes a problem configuration and returns a solution for it
 pub fn solve(config: Config, verbose: bool, optimal: bool) -> Solution {
     let start_time = Instant::now();
     let mut all_known_options = AllKnownOptions::new(verbose);
@@ -1119,7 +1117,7 @@ pub fn solve(config: Config, verbose: bool, optimal: bool) -> Solution {
     return all_known_options.get_solution(config, start_time);
 }
 
-///Calculates all the known options for truck at given index
+///Calculates `KnownRoutesForTruck` for truck at given index
 fn solve_for_truck(
     config: &Config,
     truck_index: usize,
@@ -1163,6 +1161,7 @@ fn solve_for_truck(
     return known_options;
 }
 
+///Represents recursive search, initial call made by `solve_for_truck()`
 fn solve_for_truck_recursive(
     config: &Config,
     truck: &Truck,
@@ -1195,6 +1194,9 @@ fn solve_for_truck_recursive(
     }
 }
 
+///Handles the cases that need to be covered when at the depot:
+/// - finishing the route there
+/// - (un-)loading containers before continuing on new branch
 fn apply_depot_actions(
     config: &Config,
     truck: &Truck,
